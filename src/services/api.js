@@ -3,7 +3,8 @@
  * Clean REST client for user authentication, friend requests, and conversation data.
  */
 
-const BASE_URL = import.meta.env.VITE_BACKEND_URL || '';
+const rawBackendUrl = (import.meta.env.VITE_BACKEND_URL || '').trim();
+const BASE_URL = rawBackendUrl ? rawBackendUrl.replace(/\/+$/, '') : '';
 
 export async function apiRequest(endpoint, method = 'GET', body = null) {
   const headers = {

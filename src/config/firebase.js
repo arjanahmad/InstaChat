@@ -3,17 +3,17 @@ import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyCjShUCZutExsdZC3Gw-fWtMGP_ggOoC_Q',
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'battlechat-5329e.firebaseapp.com',
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'battlechat-5329e',
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'battlechat-5329e.firebasestorage.app',
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '800187924567',
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:800187924567:web:4cfbd607ebcb887ba26312',
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '',
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || '',
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || '',
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || '',
 };
 
-// Initialize Firebase only once
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-export const auth = getAuth(app);
-export const db = getFirestore(app);
+// Initialize Firebase only if API key is provided
+const app = firebaseConfig.apiKey && !getApps().length ? initializeApp(firebaseConfig) : (getApps().length ? getApp() : null);
+export const auth = app ? getAuth(app) : null;
+export const db = app ? getFirestore(app) : null;
 
 export default app;

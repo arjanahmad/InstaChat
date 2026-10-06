@@ -4,12 +4,12 @@ import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } f
 import { getFirestore, doc, setDoc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 
 const firebaseConfig = {
-  apiKey: 'AIzaSyCjShUCZutExsdZC3Gw-fWtMGP_ggOoC_Q',
-  authDomain: 'battlechat-5329e.firebaseapp.com',
-  projectId: 'battlechat-5329e',
-  storageBucket: 'battlechat-5329e.firebasestorage.app',
-  messagingSenderId: '800187924567',
-  appId: '1:800187924567:web:4cfbd607ebcb887ba26312',
+  apiKey: process.env.VITE_FIREBASE_API_KEY || '',
+  authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN || '',
+  projectId: process.env.VITE_FIREBASE_PROJECT_ID || '',
+  storageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET || '',
+  messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
+  appId: process.env.VITE_FIREBASE_APP_ID || '',
 };
 
 async function testFriendFlow() {

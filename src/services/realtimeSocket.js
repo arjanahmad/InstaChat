@@ -6,7 +6,8 @@
 
 import { io } from 'socket.io-client';
 
-const SOCKET_SERVER_URL = import.meta.env.VITE_BACKEND_URL || window.location.origin;
+const rawSocketUrl = (import.meta.env.VITE_BACKEND_URL || (typeof window !== 'undefined' ? window.location.origin : '')).trim();
+const SOCKET_SERVER_URL = rawSocketUrl ? rawSocketUrl.replace(/\/+$/, '') : '';
 
 class RealtimeSocketManager {
   constructor() {

@@ -70,8 +70,42 @@ export function getConversationId(idA, idB) {
 }
 
 const app = express();
-app.use(cors({ origin: true, credentials: true }));
+
+const corsOriginEnv = process.env.CORS_ORIGIN;
+const allowedOrigins = corsOriginEnv && corsOriginEnv !== '*'
+  ? corsOriginEnv.split(',').map((o) => o.trim())
+  : null;
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || !allowedOrigins || allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+      callback(null, true);
+    } else {
+      callback(null, true);
+    }
+  },
+  credentials: true,
+}));
 app.use(express.json({ limit: '20mb' }));
+
+// Production health checks for Render, Railway, Fly.io, Heroku, etc.
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    service: 'instachat-backend',
+    uptimeSeconds: Math.floor(process.uptime()),
+    timestamp: Date.now(),
+  });
+});
+
+app.get('/', (req, res) => {
+  res.json({
+    status: 'ok',
+    service: 'INSTAChat Production Realtime Engine',
+    version: '1.0.0',
+    usersCount: Object.keys(db.users || {}).length,
+  });
+});
 
 const server = http.createServer(app);
 const io = new Server(server, {

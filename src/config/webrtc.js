@@ -3,8 +3,20 @@
  * Implements Multi-STUN and TURN relay traversal for cross-network connectivity.
  */
 
+const customTurnServers = [];
+if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_TURN_SERVER_URL) {
+  customTurnServers.push({
+    urls: import.meta.env.VITE_TURN_SERVER_URL.includes(',') 
+      ? import.meta.env.VITE_TURN_SERVER_URL.split(',').map((u) => u.trim()) 
+      : import.meta.env.VITE_TURN_SERVER_URL.trim(),
+    ...(import.meta.env.VITE_TURN_USERNAME ? { username: import.meta.env.VITE_TURN_USERNAME } : {}),
+    ...(import.meta.env.VITE_TURN_CREDENTIAL ? { credential: import.meta.env.VITE_TURN_CREDENTIAL } : {}),
+  });
+}
+
 export const RTC_CONFIG = {
   iceServers: [
+    ...customTurnServers,
     // Public STUN Servers
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },

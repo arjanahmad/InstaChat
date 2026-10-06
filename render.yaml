@@ -1,0 +1,14 @@
+services:
+  # INSTAChat Realtime Backend Service
+  - type: web
+    name: instachat-backend
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server/index.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: CORS_ORIGIN
+        value: "*"
