@@ -219,6 +219,50 @@
       "online": false,
       "lastActive": 1791312378379,
       "createdAt": 1791312337378
+    },
+    "usr_1791321134729_a4965d75": {
+      "userId": "usr_1791321134729_a4965d75",
+      "uid": "usr_1791321134729_a4965d75",
+      "username": "Alpha_31683",
+      "usernameLower": "alpha_31683",
+      "email": "alpha_31683@instachat.io",
+      "passwordHash": "043d07f7dc4cfb3ed4564aa50974c4c890b5d3725a57984c14985ac2ee44c495",
+      "profileImageUrl": null,
+      "coins": 100,
+      "wins": 0,
+      "losses": 0,
+      "draws": 0,
+      "gamesPlayed": 0,
+      "currentStreak": 0,
+      "bestStreak": 0,
+      "ticTacToeWins": 0,
+      "connectFourWins": 0,
+      "rpsWins": 0,
+      "online": false,
+      "lastActive": 1791321179549,
+      "createdAt": 1791321134729
+    },
+    "usr_1791321135640_7e6b8cd5": {
+      "userId": "usr_1791321135640_7e6b8cd5",
+      "uid": "usr_1791321135640_7e6b8cd5",
+      "username": "Beta_31683",
+      "usernameLower": "beta_31683",
+      "email": "beta_31683@instachat.io",
+      "passwordHash": "043d07f7dc4cfb3ed4564aa50974c4c890b5d3725a57984c14985ac2ee44c495",
+      "profileImageUrl": null,
+      "coins": 100,
+      "wins": 0,
+      "losses": 0,
+      "draws": 0,
+      "gamesPlayed": 0,
+      "currentStreak": 0,
+      "bestStreak": 0,
+      "ticTacToeWins": 0,
+      "connectFourWins": 0,
+      "rpsWins": 0,
+      "online": false,
+      "lastActive": 1791321179532,
+      "createdAt": 1791321135640
     }
   },
   "usernames": {
@@ -231,7 +275,9 @@
     "alpha_29250": "usr_1791312138109_eb1cf941",
     "beta_29250": "usr_1791312138984_f5efb8cb",
     "alpha_30443": "usr_1791312336438_2b1d503c",
-    "beta_30443": "usr_1791312337378_e936550f"
+    "beta_30443": "usr_1791312337378_e936550f",
+    "alpha_31683": "usr_1791321134729_a4965d75",
+    "beta_31683": "usr_1791321135640_7e6b8cd5"
   },
   "friendships": {
     "usr_1791311522203_dc2d9404_usr_1791311523094_ac33d496": {
@@ -265,6 +311,14 @@
       "nicknameA": "",
       "nicknameB": "",
       "createdAt": 1791312344650
+    },
+    "usr_1791321134729_a4965d75_usr_1791321135640_7e6b8cd5": {
+      "id": "usr_1791321134729_a4965d75_usr_1791321135640_7e6b8cd5",
+      "userA": "usr_1791321134729_a4965d75",
+      "userB": "usr_1791321135640_7e6b8cd5",
+      "nicknameA": "",
+      "nicknameB": "",
+      "createdAt": 1791321142900
     }
   },
   "friendRequests": {
@@ -311,6 +365,17 @@
       "receiverProfileImageUrl": null,
       "status": "ACCEPTED",
       "createdAt": 1791312341851
+    },
+    "usr_1791321134729_a4965d75_usr_1791321135640_7e6b8cd5": {
+      "requestId": "usr_1791321134729_a4965d75_usr_1791321135640_7e6b8cd5",
+      "senderId": "usr_1791321134729_a4965d75",
+      "senderUsername": "Alpha_31683",
+      "senderProfileImageUrl": null,
+      "receiverId": "usr_1791321135640_7e6b8cd5",
+      "receiverUsername": "Beta_31683",
+      "receiverProfileImageUrl": null,
+      "status": "ACCEPTED",
+      "createdAt": 1791321140113
     }
   },
   "conversations": {
@@ -373,6 +438,21 @@
       "lastMessage": "Realtime verification from A at 1791312348700",
       "lastMessageTimestamp": 1791312349011,
       "lastSenderId": "usr_1791312336438_2b1d503c"
+    },
+    "usr_1791321134729_a4965d75_usr_1791321135640_7e6b8cd5": {
+      "conversationId": "usr_1791321134729_a4965d75_usr_1791321135640_7e6b8cd5",
+      "id": "usr_1791321134729_a4965d75_usr_1791321135640_7e6b8cd5",
+      "participants": [
+        "usr_1791321134729_a4965d75",
+        "usr_1791321135640_7e6b8cd5"
+      ],
+      "participantUsernames": {
+        "usr_1791321134729_a4965d75": "Alpha_31683",
+        "usr_1791321135640_7e6b8cd5": "Beta_31683"
+      },
+      "lastMessage": "Realtime verification from A at 1791321147817",
+      "lastMessageTimestamp": 1791321148102,
+      "lastSenderId": "usr_1791321134729_a4965d75"
     }
   },
   "messages": {
@@ -484,6 +564,29 @@
         "documentSize": 0,
         "documentMimeType": null,
         "timestamp": 1791312349011,
+        "status": "SENT",
+        "isRead": false,
+        "read": false
+      }
+    ],
+    "usr_1791321134729_a4965d75_usr_1791321135640_7e6b8cd5": [
+      {
+        "messageId": "msg_1791321148102_82cc31a4",
+        "id": "msg_1791321148102_82cc31a4",
+        "conversationId": "usr_1791321134729_a4965d75_usr_1791321135640_7e6b8cd5",
+        "senderId": "usr_1791321134729_a4965d75",
+        "receiverId": "usr_1791321135640_7e6b8cd5",
+        "text": "Realtime verification from A at 1791321147817",
+        "messageType": "TEXT",
+        "imageUrl": null,
+        "videoUrl": null,
+        "voiceUrl": null,
+        "voiceDurationSeconds": 0,
+        "documentUrl": null,
+        "documentName": null,
+        "documentSize": 0,
+        "documentMimeType": null,
+        "timestamp": 1791321148102,
         "status": "SENT",
         "isRead": false,
         "read": false
@@ -634,6 +737,42 @@
       "rematchPlayer2": false,
       "createdAt": 1791312364549,
       "updatedAt": 1791312368722
+    },
+    "room_1791321163647_aaweb": {
+      "roomId": "room_1791321163647_aaweb",
+      "gameType": "TIC_TAC_TOE",
+      "player1Id": "usr_1791321134729_a4965d75",
+      "player1Username": "Alpha_31683",
+      "player2Id": "usr_1791321135640_7e6b8cd5",
+      "player2Username": "Beta_31683",
+      "currentTurnPlayerId": "usr_1791321135640_7e6b8cd5",
+      "status": "IN_PROGRESS",
+      "boardState": [
+        "X",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ],
+      "p1Choice": null,
+      "p2Choice": null,
+      "p1Score": 0,
+      "p2Score": 0,
+      "currentRound": 1,
+      "maxRounds": 3,
+      "lastRoundResult": "",
+      "winnerId": null,
+      "winnerUsername": null,
+      "isDraw": false,
+      "winningLine": [],
+      "rematchPlayer1": false,
+      "rematchPlayer2": false,
+      "createdAt": 1791321163648,
+      "updatedAt": 1791321169757
     }
   },
   "gameInvites": {
@@ -680,6 +819,17 @@
       "receiverUsername": "Beta_30443",
       "status": "ACCEPTED",
       "timestamp": 1791312364549
+    },
+    "invite_1791321163647_0par9": {
+      "invitationId": "invite_1791321163647_0par9",
+      "roomId": "room_1791321163647_aaweb",
+      "gameType": "TIC_TAC_TOE",
+      "senderId": "usr_1791321134729_a4965d75",
+      "senderUsername": "Alpha_31683",
+      "receiverId": "usr_1791321135640_7e6b8cd5",
+      "receiverUsername": "Beta_31683",
+      "status": "ACCEPTED",
+      "timestamp": 1791321163648
     }
   },
   "activeCalls": {}
