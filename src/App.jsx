@@ -1,0 +1,141 @@
+import React, { useState, useEffect } from 'react';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { ChatProvider, useChat } from './context/ChatContext';
+import { CallProvider, useCall } from './context/CallContext';
+import { GameProvider, useGame } from './context/GameContext';
+import Header from './components/common/Header';
+import Sidebar from './components/common/Sidebar';
+import BottomNav from './components/common/BottomNav';
+import AuthModal from './components/auth/AuthModal';
+import IncomingCallDialog from './components/calls/IncomingCallDialog';
+import ActiveCallModal from './components/calls/ActiveCallModal';
+import GameInvitationDialog from './components/games/GameInvitationDialog';
+import InviteFriendModal from './components/games/InviteFriendModal';
+
+// Views
+import HomeView from './views/HomeView';
+import ChatsView from './views/ChatsView';
+import FriendsView from './views/FriendsView';
+import CallsView from './views/CallsView';
+import GamesView from './views/GamesView';
+import NotificationsView from './views/NotificationsView';
+import ProfileView from './views/ProfileView';
+import SettingsView from './views/SettingsView';
+
+function AppContent() {
+  const { currentUser, loading } = useAuth();
+  const { activeRoomId, isInviteModalOpen, setIsInviteModalOpen, selectedGameType } = useGame();
+  const [activeTab, setActiveTab] = useState('home');
+
+  // Automatically open Games view when a game room becomes active
+  useEffect(() => {
+    if (activeRoomId) {
+      setActiveTab('games');
+    }
+  }, [activeRoomId]);
+
+  if (loading) {
+    return (
+      <div
+        style={{
+          width: '100vw',
+          height: '100vh',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'var(--bg-primary)',
+          gap: '16px',
+        }}
+      >
+        <img
+          src="/logo.svg"
+          alt="INSTAChat"
+          style={{ width: 64, height: 64, borderRadius: 16, animation: 'pulseGlow 1.5s infinite' }}
+        />
+        <div style={{ color: 'var(--soft-cyan)', fontSize: '0.9rem', fontWeight: 600, letterSpacing: '0.05em' }}>
+          LOADING INSTACHAT...
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    return <AuthModal />;
+  }
+
+  return (
+    <div style={{ display: 'flex', width: '100vw', height: '100vh', overflow: 'hidden' }}>
+      {/* Subtle ambient lighting */}
+      <div className="ambient-bg" />
+
+      {/* Desktop Sidebar Navigation */}
+      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
+
+      {/* Main Content Area */}
+      <div
+        style={{
+          flex: 1,
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          position: 'relative',
+          paddingBottom: 'var(--sidebar-width) === 0 ? var(--bottom-nav-height) : 0',
+        }}
+      >
+        {/* Header Bar */}
+        <Header activeTab={activeTab} onTabChange={setActiveTab} />
+
+        {/* Tab View Container */}
+        <main
+          style={{
+            flex: 1,
+            overflow: 'hidden',
+            display: 'flex',
+            position: 'relative',
+            marginBottom: 'var(--bottom-nav-height, 0px)',
+          }}
+          className="main-view-container"
+        >
+          {activeTab === 'home' && <HomeView onNavigate={setActiveTab} />}
+          {activeTab === 'chats' && <ChatsView />}
+          {activeTab === 'friends' && <FriendsView onNavigateToChats={() => setActiveTab('chats')} />}
+          {activeTab === 'calls' && <CallsView />}
+          {activeTab === 'games' && <GamesView />}
+          {activeTab === 'notifications' && <NotificationsView onNavigate={setActiveTab} />}
+          {activeTab === 'profile' && <ProfileView />}
+          {activeTab === 'settings' && <SettingsView />}
+        </main>
+
+        {/* Mobile Bottom Navigation */}
+        <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
+      </div>
+
+      {/* Global Modals & WebRTC Overlays */}
+      <IncomingCallDialog />
+      <ActiveCallModal />
+      <GameInvitationDialog />
+      {isInviteModalOpen && (
+        <InviteFriendModal
+          gameType={selectedGameType}
+          onClose={() => setIsInviteModalOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <ChatProvider>
+        <CallProvider>
+          <GameProvider>
+            <AppContent />
+          </GameProvider>
+        </CallProvider>
+      </ChatProvider>
+    </AuthProvider>
+  );
+}
