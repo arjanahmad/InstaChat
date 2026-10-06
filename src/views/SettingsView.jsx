@@ -143,8 +143,8 @@ export default function SettingsView() {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '0.85rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: 'rgba(255,255,255,0.03)', borderRadius: 'var(--radius-sm)' }}>
-              <span style={{ color: 'var(--text-muted)' }}>Firebase Firestore & Auth</span>
-              <span style={{ color: '#10b981', fontWeight: 600 }}>Active (battlechat-5329e)</span>
+              <span style={{ color: 'var(--text-muted)' }}>Realtime Sync Engine</span>
+              <span style={{ color: '#10b981', fontWeight: 600 }}>Active (Zero Quota / Supabase Ready)</span>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: 'rgba(255,255,255,0.03)', borderRadius: 'var(--radius-sm)' }}>

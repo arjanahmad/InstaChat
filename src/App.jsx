@@ -11,6 +11,7 @@ import IncomingCallDialog from './components/calls/IncomingCallDialog';
 import ActiveCallModal from './components/calls/ActiveCallModal';
 import GameInvitationDialog from './components/games/GameInvitationDialog';
 import InviteFriendModal from './components/games/InviteFriendModal';
+import ErrorBoundary from './components/common/ErrorBoundary';
 
 // Views
 import HomeView from './views/HomeView';
@@ -61,81 +62,120 @@ function AppContent() {
   }
 
   if (!currentUser) {
-    return <AuthModal />;
+    return (
+      <ErrorBoundary title="Authentication screen issue">
+        <AuthModal />
+      </ErrorBoundary>
+    );
   }
 
   return (
-    <div style={{ display: 'flex', width: '100vw', height: '100vh', overflow: 'hidden' }}>
-      {/* Subtle ambient lighting */}
-      <div className="ambient-bg" />
+    <ErrorBoundary title="INSTAChat Application issue" onHome={() => setActiveTab('home')}>
+      <div style={{ display: 'flex', width: '100vw', height: '100vh', overflow: 'hidden' }}>
+        {/* Subtle ambient lighting */}
+        <div className="ambient-bg" />
 
-      {/* Desktop Sidebar Navigation */}
-      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
+        {/* Desktop Sidebar Navigation */}
+        <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
 
-      {/* Main Content Area */}
-      <div
-        style={{
-          flex: 1,
-          height: '100%',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-          position: 'relative',
-          paddingBottom: 'var(--sidebar-width) === 0 ? var(--bottom-nav-height) : 0',
-        }}
-      >
-        {/* Header Bar */}
-        <Header activeTab={activeTab} onTabChange={setActiveTab} />
-
-        {/* Tab View Container */}
-        <main
+        {/* Main Content Area */}
+        <div
           style={{
             flex: 1,
-            overflow: 'hidden',
+            height: '100%',
             display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
             position: 'relative',
-            marginBottom: 'var(--bottom-nav-height, 0px)',
           }}
-          className="main-view-container"
         >
-          {activeTab === 'home' && <HomeView onNavigate={setActiveTab} />}
-          {activeTab === 'chats' && <ChatsView />}
-          {activeTab === 'friends' && <FriendsView onNavigateToChats={() => setActiveTab('chats')} />}
-          {activeTab === 'calls' && <CallsView />}
-          {activeTab === 'games' && <GamesView />}
-          {activeTab === 'notifications' && <NotificationsView onNavigate={setActiveTab} />}
-          {activeTab === 'profile' && <ProfileView />}
-          {activeTab === 'settings' && <SettingsView />}
-        </main>
+          {/* Header Bar */}
+          <Header activeTab={activeTab} onTabChange={setActiveTab} />
 
-        {/* Mobile Bottom Navigation */}
-        <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
+          {/* Tab View Container */}
+          <main
+            style={{
+              flex: 1,
+              overflow: 'hidden',
+              display: 'flex',
+              position: 'relative',
+              marginBottom: 'var(--bottom-nav-height, 0px)',
+            }}
+            className="main-view-container"
+          >
+            {activeTab === 'home' && (
+              <ErrorBoundary title="Home view issue" onHome={() => setActiveTab('home')}>
+                <HomeView onNavigate={setActiveTab} />
+              </ErrorBoundary>
+            )}
+            {activeTab === 'chats' && (
+              <ErrorBoundary title="Chats view issue" onHome={() => setActiveTab('home')}>
+                <ChatsView />
+              </ErrorBoundary>
+            )}
+            {activeTab === 'friends' && (
+              <ErrorBoundary title="Friends view issue" onHome={() => setActiveTab('home')}>
+                <FriendsView onNavigateToChats={() => setActiveTab('chats')} />
+              </ErrorBoundary>
+            )}
+            {activeTab === 'calls' && (
+              <ErrorBoundary title="Calls hub issue" onHome={() => setActiveTab('home')}>
+                <CallsView />
+              </ErrorBoundary>
+            )}
+            {activeTab === 'games' && (
+              <ErrorBoundary title="Games room issue" onHome={() => setActiveTab('home')}>
+                <GamesView />
+              </ErrorBoundary>
+            )}
+            {activeTab === 'notifications' && (
+              <ErrorBoundary title="Notifications issue" onHome={() => setActiveTab('home')}>
+                <NotificationsView onNavigate={setActiveTab} />
+              </ErrorBoundary>
+            )}
+            {activeTab === 'profile' && (
+              <ErrorBoundary title="Profile view issue" onHome={() => setActiveTab('home')}>
+                <ProfileView />
+              </ErrorBoundary>
+            )}
+            {activeTab === 'settings' && (
+              <ErrorBoundary title="Settings view issue" onHome={() => setActiveTab('home')}>
+                <SettingsView />
+              </ErrorBoundary>
+            )}
+          </main>
+
+          {/* Mobile Bottom Navigation */}
+          <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
+        </div>
+
+        {/* Global Modals & WebRTC Overlays */}
+        <IncomingCallDialog />
+        <ActiveCallModal />
+        <GameInvitationDialog />
+        {isInviteModalOpen && (
+          <InviteFriendModal
+            gameType={selectedGameType}
+            onClose={() => setIsInviteModalOpen(false)}
+          />
+        )}
       </div>
-
-      {/* Global Modals & WebRTC Overlays */}
-      <IncomingCallDialog />
-      <ActiveCallModal />
-      <GameInvitationDialog />
-      {isInviteModalOpen && (
-        <InviteFriendModal
-          gameType={selectedGameType}
-          onClose={() => setIsInviteModalOpen(false)}
-        />
-      )}
-    </div>
+    </ErrorBoundary>
   );
 }
 
 export default function App() {
   return (
-    <AuthProvider>
-      <ChatProvider>
-        <CallProvider>
-          <GameProvider>
-            <AppContent />
-          </GameProvider>
-        </CallProvider>
-      </ChatProvider>
-    </AuthProvider>
+    <ErrorBoundary title="INSTAChat System Error">
+      <AuthProvider>
+        <ChatProvider>
+          <CallProvider>
+            <GameProvider>
+              <AppContent />
+            </GameProvider>
+          </CallProvider>
+        </ChatProvider>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }

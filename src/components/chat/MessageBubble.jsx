@@ -7,7 +7,6 @@ import {
   Pause,
   FileText,
   Download,
-  ExternalLink,
 } from 'lucide-react';
 
 export default function MessageBubble({ message, isOwn, onMediaClick }) {

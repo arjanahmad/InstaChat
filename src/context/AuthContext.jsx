@@ -1,93 +1,65 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { onAuthStateChanged } from 'firebase/auth';
-import { doc, onSnapshot } from 'firebase/firestore';
-import { auth, db } from '../config/firebase';
 import {
   signUp as authSignUp,
   logIn as authLogIn,
   logOut as authLogOut,
   resetPassword as authResetPassword,
   updateUserProfile as authUpdateProfile,
+  getStoredUser,
+  refreshUserProfile,
   updatePresence,
 } from '../services/authService';
+import { realtimeSocket } from '../services/realtimeSocket';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [currentUser, setCurrentUser] = useState(null);
+  const [currentUser, setCurrentUser] = useState(() => getStoredUser());
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState(null);
 
   useEffect(() => {
-    let userDocUnsub = null;
+    const initAuth = async () => {
+      const stored = getStoredUser();
+      if (stored?.userId) {
+        realtimeSocket.init(stored.userId);
+        try {
+          const fresh = await refreshUserProfile(stored.userId);
+          if (fresh) setCurrentUser(fresh);
+        } catch (_) {}
+      }
+      setLoading(false);
+    };
 
-    const authUnsub = onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser) {
-        // Subscribe to user Firestore doc for live updates (stats, coins, etc.)
-        userDocUnsub = onSnapshot(doc(db, 'users', firebaseUser.uid), (docSnap) => {
-          if (docSnap.exists()) {
-            setCurrentUser({
-              ...docSnap.data(),
-              uid: firebaseUser.uid,
-              email: firebaseUser.email,
-            });
-            // Update presence once user document exists
-            updatePresence(firebaseUser.uid, true);
-          } else {
-            setCurrentUser({
-              userId: firebaseUser.uid,
-              uid: firebaseUser.uid,
-              username: firebaseUser.displayName || 'User',
-              email: firebaseUser.email,
-            });
-          }
-          setLoading(false);
-        }, (err) => {
-          console.warn('User doc snapshot error:', err);
-          setCurrentUser({
-            userId: firebaseUser.uid,
-            uid: firebaseUser.uid,
-            username: firebaseUser.displayName || 'User',
-            email: firebaseUser.email,
-          });
-          setLoading(false);
-        });
-      } else {
-        if (userDocUnsub) userDocUnsub();
-        setCurrentUser(null);
-        setLoading(false);
+    initAuth();
+
+    // Listen to profile updates
+    const unsubProfile = realtimeSocket.on('user:profile-updated', (updatedUser) => {
+      if (updatedUser?.userId === currentUser?.userId) {
+        setCurrentUser(updatedUser);
       }
     });
 
-    // Window presence events
     const handleBeforeUnload = () => {
-      if (auth.currentUser) {
-        updatePresence(auth.currentUser.uid, false);
-      }
-    };
-
-    const handleVisibilityChange = () => {
-      if (auth.currentUser) {
-        updatePresence(auth.currentUser.uid, !document.hidden);
+      if (currentUser?.userId) {
+        updatePresence(currentUser.userId, false);
       }
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-      authUnsub();
-      if (userDocUnsub) userDocUnsub();
+      unsubProfile();
       window.removeEventListener('beforeunload', handleBeforeUnload);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, []);
+  }, [currentUser?.userId]);
 
   const login = async (email, password) => {
     setAuthError(null);
     try {
-      const res = await authLogIn(email, password);
-      return res;
+      const user = await authLogIn(email, password);
+      setCurrentUser(user);
+      return user;
     } catch (err) {
       setAuthError(err.message);
       throw err;
@@ -97,8 +69,9 @@ export function AuthProvider({ children }) {
   const signup = async (username, email, password) => {
     setAuthError(null);
     try {
-      const res = await authSignUp(username, email, password);
-      return res;
+      const user = await authSignUp(username, email, password);
+      setCurrentUser(user);
+      return user;
     } catch (err) {
       setAuthError(err.message);
       throw err;
@@ -109,6 +82,7 @@ export function AuthProvider({ children }) {
     setAuthError(null);
     try {
       await authLogOut();
+      setCurrentUser(null);
     } catch (err) {
       setAuthError(err.message);
       throw err;
@@ -128,7 +102,9 @@ export function AuthProvider({ children }) {
   const updateProfileData = async (updates) => {
     if (!currentUser?.userId) return;
     try {
-      await authUpdateProfile(currentUser.userId, updates);
+      const user = await authUpdateProfile(currentUser.userId, updates);
+      setCurrentUser(user);
+      return user;
     } catch (err) {
       setAuthError(err.message);
       throw err;

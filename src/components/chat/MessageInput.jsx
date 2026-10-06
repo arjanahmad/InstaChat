@@ -6,7 +6,6 @@ import {
   Video,
   FileText,
   Mic,
-  Smile,
   X,
 } from 'lucide-react';
 import VoiceRecorder from './VoiceRecorder';

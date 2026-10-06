@@ -166,8 +166,9 @@ export function CallProvider({ children }) {
     if (!incomingCall) return;
     sounds.stopTone();
     const id = incomingCall.callId;
+    const callerId = incomingCall.callerId;
     setIncomingCall(null);
-    await callManagerRef.current.rejectCall(id);
+    await callManagerRef.current.rejectCall(id, callerId);
   };
 
   /**

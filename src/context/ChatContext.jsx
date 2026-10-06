@@ -99,8 +99,8 @@ export function ChatProvider({ children }) {
       if (markReadUnsub) markReadUnsub();
       if (markDeliveredUnsub) markDeliveredUnsub();
       // Reset typing on leave
-      if (activeConversationId && currentUser?.userId) {
-        setTypingStatus(activeConversationId, currentUser.userId, currentUser.username, false);
+      if (activeConversationId && currentUser?.userId && activeFriend?.friendId) {
+        setTypingStatus(activeConversationId, currentUser.userId, currentUser.username, false, activeFriend.friendId);
       }
     };
   }, [activeConversationId, currentUser?.userId, activeFriend?.friendId]);
@@ -109,18 +109,18 @@ export function ChatProvider({ children }) {
    * Handle user typing event with debouncing
    */
   const handleTyping = useCallback(() => {
-    if (!activeConversationId || !currentUser?.userId) return;
+    if (!activeConversationId || !currentUser?.userId || !activeFriend?.friendId) return;
 
-    setTypingStatus(activeConversationId, currentUser.userId, currentUser.username, true);
+    setTypingStatus(activeConversationId, currentUser.userId, currentUser.username, true, activeFriend.friendId);
 
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
 
     typingTimeoutRef.current = setTimeout(() => {
-      setTypingStatus(activeConversationId, currentUser.userId, currentUser.username, false);
+      setTypingStatus(activeConversationId, currentUser.userId, currentUser.username, false, activeFriend.friendId);
     }, 2500);
-  }, [activeConversationId, currentUser?.userId, currentUser?.username]);
+  }, [activeConversationId, currentUser?.userId, currentUser?.username, activeFriend?.friendId]);
 
   /**
    * Select a friend to open conversation. Guarantees deterministic conversation load.
@@ -138,7 +138,7 @@ export function ChatProvider({ children }) {
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
-    setTypingStatus(activeConversationId, currentUser.userId, currentUser.username, false);
+    setTypingStatus(activeConversationId, currentUser.userId, currentUser.username, false, activeFriend.friendId);
 
     const messageData = {
       senderId: currentUser.userId,

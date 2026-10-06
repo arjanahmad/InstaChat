@@ -1,21 +1,8 @@
-import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  signOut,
-  sendPasswordResetEmail,
-  updateProfile,
-} from 'firebase/auth';
-import {
-  doc,
-  setDoc,
-  getDoc,
-  updateDoc,
-  collection,
-  query,
-  where,
-  getDocs,
-} from 'firebase/firestore';
-import { auth, db } from '../config/firebase';
+import { api } from './api';
+import { realtimeSocket } from './realtimeSocket';
+
+const AUTH_STORAGE_KEY = 'instachat_user_session';
+const TOKEN_STORAGE_KEY = 'instachat_token';
 
 /**
  * Sign up a new user with username uniqueness check and default profile stats
@@ -31,121 +18,118 @@ export async function signUp(username, email, password) {
     throw new Error('Password must be at least 6 characters.');
   }
 
-  // 1. Create Firebase Auth user first so request is authenticated (required by firestore.rules)
-  const userCredential = await createUserWithEmailAndPassword(auth, trimmedEmail, password);
-  const user = userCredential.user;
+  const res = await api.post('/api/auth/signup', {
+    username: trimmedUser,
+    email: trimmedEmail,
+    password,
+  });
 
-  // 2. Check username uniqueness with authenticated session
-  const q = query(
-    collection(db, 'users'),
-    where('usernameLower', '==', trimmedUser.toLowerCase())
-  );
-  const snap = await getDocs(q);
-  if (!snap.empty && snap.docs.some(d => d.id !== user.uid)) {
-    // Delete newly created auth user since username is taken
-    try {
-      await user.delete();
-    } catch (_) {}
-    throw new Error(`Username "${trimmedUser}" is already taken. Please choose another.`);
+  if (res.user && res.token) {
+    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(res.user));
+    localStorage.setItem(TOKEN_STORAGE_KEY, res.token);
+    realtimeSocket.init(res.user.userId);
   }
 
-  // 3. Set Auth display name
-  await updateProfile(user, { displayName: trimmedUser });
-
-  // Create Firestore User Document matching Android / Backend schema
-  const userDoc = {
-    userId: user.uid,
-    username: trimmedUser,
-    usernameLower: trimmedUser.toLowerCase(),
-    email: trimmedEmail,
-    profileImageUrl: null,
-    coins: 100,
-    wins: 0,
-    losses: 0,
-    draws: 0,
-    gamesPlayed: 0,
-    currentStreak: 0,
-    bestStreak: 0,
-    ticTacToeWins: 0,
-    connectFourWins: 0,
-    rpsWins: 0,
-    online: true,
-    lastActive: Date.now(),
-    createdAt: Date.now(),
-  };
-
-  await setDoc(doc(db, 'users', user.uid), userDoc);
-  return { ...userDoc, authUser: user };
+  return res.user;
 }
 
 /**
  * Log in existing user
  */
 export async function logIn(email, password) {
-  const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
-  const user = userCredential.user;
+  const trimmedEmail = email.trim();
 
-  // Set presence to online
-  try {
-    await updateDoc(doc(db, 'users', user.uid), {
-      online: true,
-      lastActive: Date.now(),
-    });
-  } catch (_) {}
+  const res = await api.post('/api/auth/login', {
+    email: trimmedEmail,
+    password,
+  });
 
-  const userDocSnap = await getDoc(doc(db, 'users', user.uid));
-  const userData = userDocSnap.exists() ? userDocSnap.data() : { userId: user.uid, email: user.email };
-  return { ...userData, authUser: user };
+  if (res.user && res.token) {
+    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(res.user));
+    localStorage.setItem(TOKEN_STORAGE_KEY, res.token);
+    realtimeSocket.init(res.user.userId);
+  }
+
+  return res.user;
 }
 
 /**
- * Log out user and set offline
+ * Log out user
  */
 export async function logOut() {
-  if (auth.currentUser) {
+  const session = getStoredUser();
+  if (session?.userId) {
     try {
-      await updateDoc(doc(db, 'users', auth.currentUser.uid), {
-        online: false,
-        lastActive: Date.now(),
-      });
+      await api.post('/api/auth/logout', { userId: session.userId });
     } catch (_) {}
   }
-  await signOut(auth);
+  localStorage.removeItem(AUTH_STORAGE_KEY);
+  localStorage.removeItem(TOKEN_STORAGE_KEY);
+  realtimeSocket.disconnect();
 }
 
 /**
- * Send password reset email
+ * Restore stored user session
  */
-export async function resetPassword(email) {
-  if (!email || !email.trim()) {
-    throw new Error('Please enter your email address.');
+export function getStoredUser() {
+  try {
+    const raw = localStorage.getItem(AUTH_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (_) {
+    return null;
   }
-  await sendPasswordResetEmail(auth, email.trim());
+}
+
+/**
+ * Refresh user profile from backend
+ */
+export async function refreshUserProfile(userId) {
+  if (!userId) return null;
+  try {
+    const res = await api.get(`/api/auth/me/${userId}`);
+    if (res.user) {
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(res.user));
+      return res.user;
+    }
+  } catch (err) {
+    console.debug('Failed to refresh profile:', err);
+  }
+  return getStoredUser();
 }
 
 /**
  * Update user profile
  */
 export async function updateUserProfile(userId, updates) {
-  const ref = doc(db, 'users', userId);
-  await updateDoc(ref, {
-    ...updates,
-    lastActive: Date.now(),
+  const res = await api.post('/api/auth/update-profile', {
+    userId,
+    updates,
   });
+
+  if (res.user) {
+    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(res.user));
+  }
+  return res.user;
 }
 
 /**
  * Set user online/offline status
  */
-export async function updatePresence(userId, isOnline) {
+export function updatePresence(userId, isOnline) {
   if (!userId) return;
-  try {
-    const ref = doc(db, 'users', userId);
-    await updateDoc(ref, {
-      online: isOnline,
-      lastActive: Date.now(),
-    });
-  } catch (err) {
-    console.debug('Failed to update presence:', err.message);
+  // Socket handles presence automatically upon connect/disconnect
+  if (isOnline) {
+    realtimeSocket.init(userId);
   }
+}
+
+/**
+ * Password reset placeholder
+ */
+export async function resetPassword(email) {
+  if (!email || !email.trim()) {
+    throw new Error('Please enter your email address.');
+  }
+  // Local/Custom backend mock reset
+  return true;
 }
