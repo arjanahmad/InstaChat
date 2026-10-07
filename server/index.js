@@ -71,21 +71,74 @@ export function getConversationId(idA, idB) {
 
 const app = express();
 
-const corsOriginEnv = process.env.CORS_ORIGIN;
-const allowedOrigins = corsOriginEnv && corsOriginEnv !== '*'
-  ? corsOriginEnv.split(',').map((o) => o.trim())
-  : null;
+// Production and Local Development Allowed Origins
+const ALLOWED_ORIGINS = [
+  'https://instachat07.netlify.app',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'http://localhost:4173',
+  'http://127.0.0.1:4173',
+];
 
-app.use(cors({
+if (process.env.CORS_ORIGIN) {
+  process.env.CORS_ORIGIN.split(',').forEach((orig) => {
+    const trimmed = orig.trim();
+    if (trimmed && trimmed !== '*' && !ALLOWED_ORIGINS.includes(trimmed)) {
+      ALLOWED_ORIGINS.push(trimmed);
+    }
+  });
+}
+
+export function isOriginAllowed(origin) {
+  if (!origin) return true; // non-browser clients, health checks, curl
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  try {
+    const parsed = new URL(origin);
+    if (parsed.hostname === 'instachat07.netlify.app' || parsed.hostname.endsWith('--instachat07.netlify.app')) {
+      return true;
+    }
+  } catch {
+    // Malformed origin
+  }
+  return false;
+}
+
+const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin || !allowedOrigins || allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+    if (isOriginAllowed(origin)) {
       callback(null, true);
     } else {
-      callback(null, true);
+      callback(new Error(`Origin ${origin} not allowed by CORS.`));
     }
   },
-  credentials: true,
-}));
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Requested-With',
+    'Accept',
+    'Origin',
+  ],
+  exposedHeaders: ['Content-Range', 'X-Content-Range'],
+  credentials: false,
+  optionsSuccessStatus: 204,
+  maxAge: 86400,
+};
+
+// Express CORS middleware applied to all routes
+app.use(cors(corsOptions));
+app.options('{*splat}', cors(corsOptions));
+
+// Handle CORS rejection errors cleanly with 403 JSON
+app.use((err, req, res, next) => {
+  if (err && err.message && err.message.includes('CORS')) {
+    return res.status(403).json({ error: err.message });
+  }
+  next(err);
+});
+
 app.use(express.json({ limit: '20mb' }));
 
 // Production health checks for Render, Railway, Fly.io, Heroku, etc.
@@ -110,8 +163,15 @@ app.get('/', (req, res) => {
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: '*',
-    methods: ['GET', 'POST'],
+    origin: (origin, callback) => {
+      if (isOriginAllowed(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error(`Origin ${origin} not allowed by Socket.IO CORS`));
+      }
+    },
+    methods: ['GET', 'POST', 'OPTIONS'],
+    credentials: false,
   },
   pingTimeout: 30000,
   pingInterval: 15000,
@@ -866,9 +926,9 @@ io.on('connection', (socket) => {
   });
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`====================================================`);
   console.log(`  INSTAChat Production Realtime Server running on   `);
-  console.log(`  http://localhost:${PORT}                           `);
+  console.log(`  http://0.0.0.0:${PORT}                             `);
   console.log(`====================================================`);
 });
