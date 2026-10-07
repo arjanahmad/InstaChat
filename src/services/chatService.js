@@ -51,6 +51,12 @@ export function subscribeToMessages(conversationId, callback) {
 
   fetchHistory();
 
+  const pollTimer = setInterval(() => {
+    if (!realtimeSocket.isConnected && isSubscribed) {
+      fetchHistory();
+    }
+  }, 2500);
+
   const handleMessage = (newMsg) => {
     if (newMsg.conversationId === conversationId) {
       messagesMap.set(newMsg.messageId, newMsg);
@@ -83,6 +89,7 @@ export function subscribeToMessages(conversationId, callback) {
 
   return () => {
     isSubscribed = false;
+    clearInterval(pollTimer);
     unsubSent();
     unsubReceived();
     unsubDelivered();
@@ -161,12 +168,19 @@ export function subscribeToConversations(userId, callback) {
 
   fetchConversations();
 
+  const pollTimer = setInterval(() => {
+    if (!realtimeSocket.isConnected && isSubscribed) {
+      fetchConversations();
+    }
+  }, 3500);
+
   const handleMsg = () => fetchConversations();
   const unsubSent = realtimeSocket.on('chat:message-sent', handleMsg);
   const unsubReceived = realtimeSocket.on('chat:message-received', handleMsg);
 
   return () => {
     isSubscribed = false;
+    clearInterval(pollTimer);
     unsubSent();
     unsubReceived();
   };

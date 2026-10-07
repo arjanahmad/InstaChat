@@ -1,10 +1,12 @@
 /**
  * INSTAChat API Client
- * Clean REST client for user authentication, friend requests, and conversation data.
+ * High-resilience REST client for user authentication, friend requests, and conversation data.
+ * Features automatic fallback from external backend to same-origin endpoint.
  */
 
 const rawBackendUrl = (import.meta.env.VITE_BACKEND_URL || '').trim();
-const BASE_URL = rawBackendUrl ? rawBackendUrl.replace(/\/+$/, '') : '';
+let configuredBaseUrl = rawBackendUrl ? rawBackendUrl.replace(/\/+$/, '') : '';
+let useSameOriginFallback = false;
 
 export async function apiRequest(endpoint, method = 'GET', body = null) {
   const headers = {
@@ -25,11 +27,38 @@ export async function apiRequest(endpoint, method = 'GET', body = null) {
     options.body = JSON.stringify(body);
   }
 
-  const res = await fetch(`${BASE_URL}${endpoint}`, options);
-  const data = await res.json().catch(() => ({}));
+  // 1. Try configured external backend if available and not marked dead
+  if (configuredBaseUrl && !useSameOriginFallback) {
+    try {
+      const res = await fetch(`${configuredBaseUrl}${endpoint}`, options);
+      const routingHeader = res.headers.get('x-render-routing');
+      
+      // If Render router returned 404 no-server, trigger immediate fallback
+      if (res.status === 404 && routingHeader === 'no-server') {
+        console.warn(`[API] Remote host ${configuredBaseUrl} has no active server. Falling back to same-origin API.`);
+        useSameOriginFallback = true;
+      } else {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(data.error || `HTTP error ${res.status}`);
+        }
+        return data;
+      }
+    } catch (err) {
+      if (err.message && err.message.includes('HTTP error')) {
+        throw err;
+      }
+      console.warn(`[API] Network failure connecting to ${configuredBaseUrl}: ${err.message}. Retrying via same-origin API.`);
+      useSameOriginFallback = true;
+    }
+  }
 
-  if (!res.ok) {
-    throw new Error(data.error || `HTTP error ${res.status}`);
+  // 2. Same-origin request (Netlify Functions or Vite local proxy)
+  const fallbackRes = await fetch(endpoint, options);
+  const data = await fallbackRes.json().catch(() => ({}));
+
+  if (!fallbackRes.ok) {
+    throw new Error(data.error || `HTTP error ${fallbackRes.status}`);
   }
 
   return data;

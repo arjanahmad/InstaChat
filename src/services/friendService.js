@@ -82,6 +82,12 @@ export function subscribeToFriends(userId, callback) {
 
   fetchFriends();
 
+  const pollTimer = setInterval(() => {
+    if (!realtimeSocket.isConnected && isSubscribed) {
+      fetchFriends();
+    }
+  }, 4000);
+
   // Listen to realtime socket presence and friendship events
   const unsubPresence = realtimeSocket.on('presence:changed', (presenceData) => {
     fetchFriends();
@@ -93,6 +99,7 @@ export function subscribeToFriends(userId, callback) {
 
   return () => {
     isSubscribed = false;
+    clearInterval(pollTimer);
     unsubPresence();
     unsubAccepted();
   };
@@ -119,6 +126,12 @@ export function subscribeToIncomingFriendRequests(userId, callback) {
 
   fetchRequests();
 
+  const pollTimer = setInterval(() => {
+    if (!realtimeSocket.isConnected && isSubscribed) {
+      fetchRequests();
+    }
+  }, 4000);
+
   const unsubReceived = realtimeSocket.on('friend:request-received', (reqDoc) => {
     if (reqDoc.receiverId === userId) {
       fetchRequests();
@@ -131,6 +144,7 @@ export function subscribeToIncomingFriendRequests(userId, callback) {
 
   return () => {
     isSubscribed = false;
+    clearInterval(pollTimer);
     unsubReceived();
     unsubAccepted();
   };
