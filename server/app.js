@@ -43,13 +43,29 @@ const initialData = {
 };
 
 export let db = { ...initialData };
+export let isDbDirty = false;
+let lastStoreSyncTime = 0;
+const SYNC_CACHE_TTL_MS = 1000;
 
 export function loadDb() {
   try {
     if (fs.existsSync(DB_FILE)) {
       const raw = fs.readFileSync(DB_FILE, 'utf-8');
-      db = { ...initialData, ...JSON.parse(raw) };
-      console.log(`[DB] Loaded ${Object.keys(db.users).length} users, ${Object.keys(db.conversations).length} conversations.`);
+      const parsed = JSON.parse(raw);
+      db = {
+        ...initialData,
+        ...parsed,
+        users: { ...initialData.users, ...(parsed.users || {}) },
+        usernames: { ...initialData.usernames, ...(parsed.usernames || {}) },
+        friendships: { ...initialData.friendships, ...(parsed.friendships || {}) },
+        friendRequests: { ...initialData.friendRequests, ...(parsed.friendRequests || {}) },
+        conversations: { ...initialData.conversations, ...(parsed.conversations || {}) },
+        messages: { ...initialData.messages, ...(parsed.messages || {}) },
+        gameRooms: { ...initialData.gameRooms, ...(parsed.gameRooms || {}) },
+        gameInvites: { ...initialData.gameInvites, ...(parsed.gameInvites || {}) },
+        activeCalls: { ...initialData.activeCalls, ...(parsed.activeCalls || {}) },
+      };
+      console.log(`[DB] Loaded ${Object.keys(db.users).length} users, ${Object.keys(db.friendRequests).length} friend requests from disk.`);
     } else {
       saveDb();
     }
@@ -59,11 +75,65 @@ export function loadDb() {
 }
 
 export function saveDb() {
+  isDbDirty = true;
   try {
     fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2), 'utf-8');
   } catch (err) {
     // Non-fatal in read-only environments
     console.warn('[DB] Failed to save DB file:', err.message);
+  }
+}
+
+export async function syncDbFromStore(force = false) {
+  const now = Date.now();
+  if (!force && (now - lastStoreSyncTime < SYNC_CACHE_TTL_MS)) {
+    return;
+  }
+
+  // Load from local file first
+  loadDb();
+
+  try {
+    const { getStore } = await import('@netlify/blobs');
+    const store = getStore({ name: 'instachat-db', consistency: 'strong' });
+    const remoteData = await store.get('db_state', { type: 'json' });
+    if (remoteData && typeof remoteData === 'object') {
+      db = {
+        ...initialData,
+        ...remoteData,
+        users: { ...initialData.users, ...(remoteData.users || {}) },
+        usernames: { ...initialData.usernames, ...(remoteData.usernames || {}) },
+        friendships: { ...initialData.friendships, ...(remoteData.friendships || {}) },
+        friendRequests: { ...initialData.friendRequests, ...(remoteData.friendRequests || {}) },
+        conversations: { ...initialData.conversations, ...(remoteData.conversations || {}) },
+        messages: { ...initialData.messages, ...(remoteData.messages || {}) },
+        gameRooms: { ...initialData.gameRooms, ...(remoteData.gameRooms || {}) },
+        gameInvites: { ...initialData.gameInvites, ...(remoteData.gameInvites || {}) },
+        activeCalls: { ...initialData.activeCalls, ...(remoteData.activeCalls || {}) },
+      };
+      try {
+        fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2), 'utf-8');
+      } catch (_) {}
+      lastStoreSyncTime = now;
+      console.log(`[DB] Netlify Blobs synced: ${Object.keys(db.users).length} users, ${Object.keys(db.friendRequests).length} friend requests.`);
+    }
+  } catch (err) {
+    // Non-fatal fallback (local disk / memory)
+  }
+}
+
+export async function syncDbToStore() {
+  if (!isDbDirty) return;
+  isDbDirty = false;
+
+  try {
+    const { getStore } = await import('@netlify/blobs');
+    const store = getStore({ name: 'instachat-db', consistency: 'strong' });
+    await store.setJSON('db_state', db);
+    lastStoreSyncTime = Date.now();
+    console.log(`[DB] Netlify Blobs saved: ${Object.keys(db.users).length} users, ${Object.keys(db.friendRequests).length} friend requests.`);
+  } catch (err) {
+    // Non-fatal
   }
 }
 
@@ -148,6 +218,21 @@ app.use((err, req, res, next) => {
   next(err);
 });
 
+// Sync persistent DB state before processing incoming request
+app.use(async (req, res, next) => {
+  try {
+    await syncDbFromStore();
+  } catch (_) {}
+
+  res.on('finish', () => {
+    if (isDbDirty) {
+      syncDbToStore().catch(() => {});
+    }
+  });
+
+  next();
+});
+
 app.use(express.json({ limit: '20mb' }));
 
 // Health Check
@@ -157,6 +242,9 @@ app.get('/health', (req, res) => {
     service: 'instachat-backend',
     uptimeSeconds: Math.floor(process.uptime()),
     timestamp: Date.now(),
+    usersCount: Object.keys(db.users || {}).length,
+    requestsCount: Object.keys(db.friendRequests || {}).length,
+    lastSync: lastStoreSyncTime,
   });
 });
 
@@ -166,6 +254,9 @@ app.get('/api/health', (req, res) => {
     service: 'instachat-backend',
     uptimeSeconds: Math.floor(process.uptime()),
     timestamp: Date.now(),
+    usersCount: Object.keys(db.users || {}).length,
+    requestsCount: Object.keys(db.friendRequests || {}).length,
+    lastSync: lastStoreSyncTime,
   });
 });
 
@@ -175,6 +266,7 @@ app.get('/', (req, res) => {
     service: 'INSTAChat Production Realtime Engine',
     version: '1.0.0',
     usersCount: Object.keys(db.users || {}).length,
+    requestsCount: Object.keys(db.friendRequests || {}).length,
   });
 });
 

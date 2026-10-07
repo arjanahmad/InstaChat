@@ -9,6 +9,8 @@ import {
   Search,
   Bell,
   Users,
+  Check,
+  X,
 } from 'lucide-react';
 import Avatar from '../components/common/Avatar';
 import AddFriendModal from '../components/friends/AddFriendModal';
@@ -17,17 +19,18 @@ import FriendRequestsModal from '../components/friends/FriendRequestsModal';
 import { useAuth } from '../context/AuthContext';
 import { useChat } from '../context/ChatContext';
 import { useCall } from '../context/CallContext';
-import { useGame } from '../context/GameContext';
 import {
   subscribeToFriends,
   subscribeToIncomingFriendRequests,
+  acceptFriendRequest,
+  rejectFriendRequest,
 } from '../services/friendService';
+import { api } from '../services/api';
 
 export default function FriendsView({ onNavigateToChats }) {
   const { currentUser } = useAuth();
   const { openChatWithFriend } = useChat();
   const { startCall } = useCall();
-  const { inviteFriendToGame, setIsInviteModalOpen } = useGame();
 
   const [friends, setFriends] = useState([]);
   const [incomingRequests, setIncomingRequests] = useState([]);
@@ -35,6 +38,7 @@ export default function FriendsView({ onNavigateToChats }) {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isRequestsModalOpen, setIsRequestsModalOpen] = useState(false);
   const [editingFriend, setEditingFriend] = useState(null);
+  const [processingReqId, setProcessingReqId] = useState(null);
 
   useEffect(() => {
     if (!currentUser?.userId) return;
@@ -52,6 +56,32 @@ export default function FriendsView({ onNavigateToChats }) {
       unsubReqs();
     };
   }, [currentUser?.userId]);
+
+  const handleAcceptRequest = async (req) => {
+    setProcessingReqId(req.requestId);
+    try {
+      await acceptFriendRequest(req, currentUser);
+      setIncomingRequests((prev) => prev.filter((r) => r.requestId !== req.requestId));
+      const res = await api.get(`/api/friends/${currentUser.userId}`);
+      if (res.friends) setFriends(res.friends);
+    } catch (err) {
+      alert('Error accepting request: ' + err.message);
+    } finally {
+      setProcessingReqId(null);
+    }
+  };
+
+  const handleRejectRequest = async (req) => {
+    setProcessingReqId(req.requestId);
+    try {
+      await rejectFriendRequest(req.requestId);
+      setIncomingRequests((prev) => prev.filter((r) => r.requestId !== req.requestId));
+    } catch (err) {
+      alert('Error rejecting request: ' + err.message);
+    } finally {
+      setProcessingReqId(null);
+    }
+  };
 
   const handleStartChat = (friend) => {
     openChatWithFriend(friend);
@@ -105,6 +135,7 @@ export default function FriendsView({ onNavigateToChats }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <button
               type="button"
+              data-testid="view-requests-btn"
               onClick={() => setIsRequestsModalOpen(true)}
               className="btn-secondary"
               style={{ position: 'relative' }}
@@ -119,6 +150,7 @@ export default function FriendsView({ onNavigateToChats }) {
 
             <button
               type="button"
+              data-testid="add-friend-trigger-btn"
               onClick={() => setIsAddModalOpen(true)}
               className="btn-primary"
             >
@@ -126,6 +158,91 @@ export default function FriendsView({ onNavigateToChats }) {
             </button>
           </div>
         </div>
+
+        {/* Pending Friend Requests Banner */}
+        {incomingRequests.length > 0 && (
+          <div
+            className="glass-panel"
+            data-testid="pending-requests-banner"
+            style={{
+              marginBottom: '24px',
+              padding: '18px 20px',
+              borderRadius: 'var(--radius-lg)',
+              border: '1px solid rgba(0, 102, 255, 0.35)',
+              background: 'linear-gradient(135deg, rgba(0, 102, 255, 0.12) 0%, rgba(138, 43, 226, 0.08) 100%)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Bell size={18} color="#00d2ff" />
+                <h3 style={{ fontSize: '1.05rem', fontWeight: 700, margin: 0, color: '#ffffff' }}>
+                  Pending Friend Requests ({incomingRequests.length})
+                </h3>
+              </div>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>
+                Respond to connect and start chatting
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {incomingRequests.map((req) => (
+                <div
+                  key={req.requestId}
+                  data-testid={`incoming-request-${req.senderUsername}`}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '12px 16px',
+                    borderRadius: 'var(--radius-md)',
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    border: '1px solid var(--border-glass)',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <Avatar
+                      src={req.senderProfileImageUrl}
+                      name={req.senderUsername}
+                      size={42}
+                      showStatus={false}
+                    />
+                    <div>
+                      <div style={{ fontSize: '0.96rem', fontWeight: 700, color: '#ffffff' }}>
+                        {req.senderUsername}
+                      </div>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)' }}>
+                        Wants to connect with you
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <button
+                      type="button"
+                      data-testid={`accept-btn-${req.senderUsername}`}
+                      disabled={processingReqId === req.requestId}
+                      onClick={() => handleAcceptRequest(req)}
+                      className="btn-primary"
+                      style={{ padding: '8px 16px', fontSize: '0.85rem' }}
+                    >
+                      <Check size={14} /> Accept
+                    </button>
+                    <button
+                      type="button"
+                      data-testid={`decline-btn-${req.senderUsername}`}
+                      disabled={processingReqId === req.requestId}
+                      onClick={() => handleRejectRequest(req)}
+                      className="btn-secondary"
+                      style={{ padding: '8px 14px', fontSize: '0.85rem', color: '#ef4444' }}
+                    >
+                      <X size={14} /> Decline
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Search Bar */}
         <div style={{ position: 'relative', marginBottom: '24px' }}>
