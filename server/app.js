@@ -5,12 +5,20 @@ import path from 'path';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+let currentDir = process.cwd();
+try {
+  if (typeof __dirname !== 'undefined') {
+    currentDir = __dirname;
+  } else if (typeof import.meta !== 'undefined' && import.meta.url) {
+    currentDir = path.dirname(fileURLToPath(import.meta.url));
+  }
+} catch (_) {
+  currentDir = process.cwd();
+}
 
 // Support both standard server and serverless /tmp environments
-const IS_SERVERLESS = !!(process.env.NETLIFY || process.env.AWS_LAMBDA_FUNCTION_NAME);
-const DATA_DIR = IS_SERVERLESS ? path.join('/tmp', 'instachat_data') : path.join(__dirname, 'data');
+const IS_SERVERLESS = !!(process.env.NETLIFY || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.LAMBDA_TASK_ROOT);
+const DATA_DIR = IS_SERVERLESS ? path.join('/tmp', 'instachat_data') : path.join(currentDir, 'data');
 const DB_FILE = path.join(DATA_DIR, 'instachat_db.json');
 
 try {
