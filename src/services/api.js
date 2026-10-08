@@ -30,7 +30,10 @@ export async function apiRequest(endpoint, method = 'GET', body = null) {
   // 1. Try configured external backend if available and not marked dead
   if (configuredBaseUrl && !useSameOriginFallback) {
     try {
-      const res = await fetch(`${configuredBaseUrl}${endpoint}`, options);
+      const res = await fetch(`${configuredBaseUrl}${endpoint}`, {
+        ...options,
+        signal: AbortSignal.timeout(3500),
+      });
       const routingHeader = res.headers.get('x-render-routing');
       
       // If Render router returned 404 no-server, trigger immediate fallback

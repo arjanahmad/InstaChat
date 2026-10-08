@@ -64,6 +64,7 @@ export default function ActiveCallModal() {
   return (
     <div
       className="modal-backdrop"
+      data-testid="active-call-modal"
       style={{
         zIndex: 2000,
         background: 'rgba(3, 6, 16, 0.94)',
@@ -142,6 +143,7 @@ export default function ActiveCallModal() {
               {/* Remote Video Feed */}
               <video
                 ref={remoteVideoRef}
+                data-testid="remote-video"
                 autoPlay
                 playsInline
                 style={{
@@ -179,6 +181,7 @@ export default function ActiveCallModal() {
               >
                 <video
                   ref={localVideoRef}
+                  data-testid="local-video"
                   autoPlay
                   playsInline
                   muted
@@ -253,6 +256,7 @@ export default function ActiveCallModal() {
           {/* Mute Button */}
           <button
             type="button"
+            data-testid="mute-call-btn"
             onClick={toggleMute}
             className="btn-icon"
             style={{
@@ -270,6 +274,7 @@ export default function ActiveCallModal() {
           {/* End Call Button */}
           <button
             type="button"
+            data-testid="end-call-btn"
             onClick={endCall}
             className="btn-danger"
             style={{
@@ -288,6 +293,7 @@ export default function ActiveCallModal() {
           {isVideo && (
             <button
               type="button"
+              data-testid="toggle-camera-btn"
               onClick={toggleCamera}
               className="btn-icon"
               style={{

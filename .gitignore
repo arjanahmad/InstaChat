@@ -9,6 +9,7 @@
 *.p12
 
 # Runtime and local database state
+data/
 server/data/*.json
 !server/data/instachat_db.json.example
 

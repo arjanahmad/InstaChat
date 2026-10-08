@@ -147,6 +147,7 @@ export default function ChatWindow({ onBack }) {
         {/* Typing indicator bubble */}
         {typingFriend && (
           <div
+            data-testid="typing-indicator"
             style={{
               alignSelf: 'flex-start',
               padding: '8px 14px',

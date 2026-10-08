@@ -211,6 +211,7 @@ export default function MessageInput({
         {/* Text Input */}
         <input
           type="text"
+          data-testid="message-input"
           placeholder={isUploading ? 'Uploading media...' : 'Type a message...'}
           value={text}
           onChange={handleTextChange}
@@ -224,6 +225,7 @@ export default function MessageInput({
         {text.trim() ? (
           <button
             type="button"
+            data-testid="send-message-btn"
             onClick={handleSend}
             disabled={isUploading}
             className="btn-primary"
@@ -235,6 +237,7 @@ export default function MessageInput({
         ) : (
           <button
             type="button"
+            data-testid="record-voice-btn"
             onClick={() => setIsRecordingVoice(true)}
             disabled={isUploading}
             className="btn-icon"

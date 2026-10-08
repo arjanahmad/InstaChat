@@ -91,21 +91,76 @@ io.on('connection', (socket) => {
     emitToUser(targetUserId, 'webrtc:ice-candidate', { callId, candidate });
   });
 
-  socket.on('webrtc:call-hangup', ({ callId, otherUserId }) => {
-    if (db.activeCalls[callId]) {
+  const handleCallHangup = ({ callId, otherUserId, targetUserId }) => {
+    const peerId = otherUserId || targetUserId;
+    if (callId && db.activeCalls[callId]) {
       db.activeCalls[callId].status = 'ENDED';
       delete db.activeCalls[callId];
     }
-    emitToUser(otherUserId, 'webrtc:call-ended', { callId });
-  });
+    if (peerId) {
+      emitToUser(peerId, 'webrtc:call-ended', { callId });
+    }
+  };
+  socket.on('webrtc:call-hangup', handleCallHangup);
+  socket.on('webrtc:call-end', handleCallHangup);
 
-  // Multiplayer Games Events
-  socket.on('game:invite-send', (inviteData) => {
-    const { inviteId, receiverId } = inviteData;
-    db.gameInvites[inviteId] = inviteData;
+  const handleCallReject = ({ callId, callerId, targetUserId }) => {
+    const peerId = callerId || targetUserId;
+    if (callId && db.activeCalls[callId]) {
+      db.activeCalls[callId].status = 'REJECTED';
+      delete db.activeCalls[callId];
+    }
+    if (peerId) {
+      emitToUser(peerId, 'webrtc:call-rejected', { callId });
+    }
+  };
+  socket.on('webrtc:call-reject', handleCallReject);
+  socket.on('webrtc:call-rejected', handleCallReject);
+
+  // Multiplayer Games Events (Supports both gameService formats)
+  const handleGameInvite = (inviteData) => {
+    const inviteId = inviteData.inviteId || inviteData.invitationId;
+    const receiverId = inviteData.receiverId || inviteData.receiverUser?.userId || inviteData.receiverUser?.uid;
+    const senderId = inviteData.senderId || inviteData.senderUser?.userId || inviteData.senderUser?.uid;
+    const normalized = {
+      ...inviteData,
+      inviteId,
+      invitationId: inviteId,
+      receiverId,
+      senderId,
+      status: 'PENDING',
+    };
+    db.gameInvites[inviteId] = normalized;
     saveDb();
-    emitToUser(receiverId, 'game:invite-received', inviteData);
-  });
+    emitToUser(receiverId, 'game:invite-received', normalized);
+    emitToUser(receiverId, 'game:invitation-received', normalized);
+  };
+  socket.on('game:invite-send', handleGameInvite);
+  socket.on('game:invite', handleGameInvite);
+
+  const handleGameAccept = ({ invitationId, inviteId, roomId, user }) => {
+    const id = invitationId || inviteId;
+    const invite = db.gameInvites[id];
+    if (invite) {
+      invite.status = 'ACCEPTED';
+      saveDb();
+      emitToUser(invite.senderId, 'game:invite-status', { inviteId: id, status: 'ACCEPTED', roomId, user });
+      emitToUser(invite.receiverId, 'game:invite-status', { inviteId: id, status: 'ACCEPTED', roomId, user });
+    }
+  };
+  socket.on('game:accept', handleGameAccept);
+
+  const handleGameDecline = ({ invitationId, inviteId, roomId }) => {
+    const id = invitationId || inviteId;
+    const invite = db.gameInvites[id];
+    if (invite) {
+      invite.status = 'DECLINED';
+      saveDb();
+      emitToUser(invite.senderId, 'game:invite-status', { inviteId: id, status: 'DECLINED', roomId });
+      emitToUser(invite.receiverId, 'game:invite-status', { inviteId: id, status: 'DECLINED', roomId });
+    }
+  };
+  socket.on('game:decline', handleGameDecline);
 
   socket.on('game:invite-respond', ({ inviteId, status, roomId, responseData }) => {
     const invite = db.gameInvites[inviteId];

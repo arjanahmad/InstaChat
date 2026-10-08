@@ -40,6 +40,8 @@ const initialData = {
   gameRooms: {},      // roomId -> roomDoc
   gameInvites: {},    // inviteId -> inviteDoc
   activeCalls: {},    // callId -> callDoc
+  pendingEvents: {},  // userId -> [ { id, event, data, timestamp } ]
+  typing: {},         // convoId -> { userId, username, isTyping, timestamp }
 };
 
 export let db = { ...initialData };
@@ -49,8 +51,18 @@ const SYNC_CACHE_TTL_MS = 1000;
 
 export function loadDb() {
   try {
-    if (fs.existsSync(DB_FILE)) {
-      const raw = fs.readFileSync(DB_FILE, 'utf-8');
+    let sourcePath = DB_FILE;
+    if (!fs.existsSync(sourcePath)) {
+      const bundledSeed = path.join(currentDir, 'data', 'instachat_db.json');
+      const rootSeed = path.join(process.cwd(), 'server', 'data', 'instachat_db.json');
+      if (fs.existsSync(bundledSeed)) {
+        sourcePath = bundledSeed;
+      } else if (fs.existsSync(rootSeed)) {
+        sourcePath = rootSeed;
+      }
+    }
+    if (fs.existsSync(sourcePath)) {
+      const raw = fs.readFileSync(sourcePath, 'utf-8');
       const parsed = JSON.parse(raw);
       db = {
         ...initialData,
@@ -64,8 +76,10 @@ export function loadDb() {
         gameRooms: { ...initialData.gameRooms, ...(parsed.gameRooms || {}) },
         gameInvites: { ...initialData.gameInvites, ...(parsed.gameInvites || {}) },
         activeCalls: { ...initialData.activeCalls, ...(parsed.activeCalls || {}) },
+        pendingEvents: { ...initialData.pendingEvents, ...(parsed.pendingEvents || {}) },
+        typing: { ...initialData.typing, ...(parsed.typing || {}) },
       };
-      console.log(`[DB] Loaded ${Object.keys(db.users).length} users, ${Object.keys(db.friendRequests).length} friend requests from disk.`);
+      console.log(`[DB] Loaded ${Object.keys(db.users).length} users, ${Object.keys(db.friendRequests).length} friend requests from ${sourcePath}.`);
     } else {
       saveDb();
     }
@@ -280,13 +294,27 @@ export function setIoInstance(io, socketsMap) {
 }
 
 export function emitToUser(userId, event, data) {
-  if (!ioInstance) return;
-  const sockets = userSocketsMap.get(userId);
-  if (sockets) {
-    for (const sId of sockets) {
-      ioInstance.to(sId).emit(event, data);
+  if (ioInstance) {
+    const sockets = userSocketsMap.get(userId);
+    if (sockets) {
+      for (const sId of sockets) {
+        ioInstance.to(sId).emit(event, data);
+      }
     }
   }
+
+  // Dual-mode reliability: queue for polling delivery
+  if (!db.pendingEvents) db.pendingEvents = {};
+  if (!db.pendingEvents[userId]) db.pendingEvents[userId] = [];
+  db.pendingEvents[userId].push({
+    id: `ev_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+    event,
+    data,
+    timestamp: Date.now(),
+  });
+
+  const cutoff = Date.now() - 60000;
+  db.pendingEvents[userId] = db.pendingEvents[userId].filter((e) => e.timestamp > cutoff).slice(-50);
 }
 
 export function broadcastPresence(userId, online, lastActive = Date.now()) {
@@ -774,6 +802,128 @@ app.post('/api/conversations/:convoId/delivered', (req, res) => {
 });
 
 /* ========================================================================= */
+/*                   REALTIME SIGNALING & EVENT RELAY ROUTES                 */
+/* ========================================================================= */
+
+// 1. Send signaling event (WebRTC, chat typing, games, custom events)
+app.post('/api/signaling/send', (req, res) => {
+  const { event, targetUserId, data } = req.body;
+  if (!event || !targetUserId) {
+    return res.status(400).json({ error: 'event and targetUserId are required' });
+  }
+
+  // Handle active call state
+  if (event === 'webrtc:call-offer' && data?.callId) {
+    db.activeCalls[data.callId] = {
+      ...data,
+      status: 'RINGING',
+      createdAt: Date.now(),
+    };
+  } else if (event === 'webrtc:call-answer' && data?.callId) {
+    if (db.activeCalls[data.callId]) {
+      db.activeCalls[data.callId].status = 'CONNECTED';
+      db.activeCalls[data.callId].answerSdp = data.answerSdp;
+    }
+  } else if (event === 'webrtc:call-hangup' && data?.callId) {
+    if (db.activeCalls[data.callId]) {
+      db.activeCalls[data.callId].status = 'ENDED';
+      delete db.activeCalls[data.callId];
+    }
+  } else if (event === 'chat:typing' && data?.conversationId) {
+    db.typing[data.conversationId] = {
+      userId: data.userId,
+      username: data.username,
+      isTyping: !!data.isTyping,
+      timestamp: Date.now(),
+    };
+  }
+
+  emitToUser(targetUserId, event, data);
+  saveDb();
+  res.json({ success: true });
+});
+
+// 2. Poll for pending events (WebRTC, call offers, typing, friend events)
+app.get('/api/signaling/poll/:userId', (req, res) => {
+  const { userId } = req.params;
+  const cutoff = Date.now() - 60000;
+
+  let events = [];
+  if (db.pendingEvents && db.pendingEvents[userId]) {
+    events = db.pendingEvents[userId].filter((e) => e.timestamp > cutoff);
+    db.pendingEvents[userId] = [];
+  }
+
+  // Check for active ringing incoming call targeting this user
+  for (const call of Object.values(db.activeCalls || {})) {
+    if (call.receiverId === userId && call.status === 'RINGING' && (Date.now() - call.createdAt < 35000)) {
+      if (!events.some((e) => e.event === 'webrtc:incoming-call' && e.data?.callId === call.callId)) {
+        events.unshift({
+          id: `ev_call_${call.callId}`,
+          event: 'webrtc:incoming-call',
+          data: call,
+          timestamp: call.createdAt,
+        });
+      }
+    }
+  }
+
+  res.json({ events });
+});
+
+// 3. Presence heartbeat
+app.post('/api/presence/heartbeat', (req, res) => {
+  const { userId } = req.body;
+  if (userId && db.users[userId]) {
+    db.users[userId].online = true;
+    db.users[userId].lastActive = Date.now();
+    saveDb();
+  }
+  res.json({ success: true, timestamp: Date.now() });
+});
+
+// 4. Online presence status for friends/all users
+app.get('/api/presence/status', (req, res) => {
+  const now = Date.now();
+  const onlineUserIds = [];
+  for (const user of Object.values(db.users || {})) {
+    if (user.online && (now - (user.lastActive || 0) < 30000)) {
+      onlineUserIds.push(user.userId);
+    } else if (user.online && (now - (user.lastActive || 0) >= 30000)) {
+      user.online = false;
+    }
+  }
+  res.json({ onlineUserIds });
+});
+
+// 5. Typing indicator endpoints
+app.post('/api/chat/typing', (req, res) => {
+  const { conversationId, userId, username, receiverId, isTyping } = req.body;
+  if (conversationId) {
+    db.typing[conversationId] = {
+      userId,
+      username,
+      isTyping: !!isTyping,
+      timestamp: Date.now(),
+    };
+  }
+  if (receiverId) {
+    emitToUser(receiverId, 'chat:typing', { conversationId, userId, username, isTyping });
+  }
+  res.json({ success: true });
+});
+
+app.get('/api/chat/typing/:conversationId', (req, res) => {
+  const { conversationId } = req.params;
+  const item = db.typing[conversationId];
+  if (item && item.isTyping && (Date.now() - item.timestamp < 3500)) {
+    res.json({ isTyping: true, username: item.username, userId: item.userId });
+  } else {
+    res.json({ isTyping: false });
+  }
+});
+
+/* ========================================================================= */
 /*                              GAMES ROUTES                                 */
 /* ========================================================================= */
 
@@ -785,8 +935,96 @@ app.get('/api/games/invitations/:userId', (req, res) => {
   res.json({ invitations: list });
 });
 
+app.post('/api/games/invitations/send', (req, res) => {
+  const inviteData = req.body;
+  const { inviteId, receiverId } = inviteData;
+  if (!inviteId || !receiverId) {
+    return res.status(400).json({ error: 'inviteId and receiverId required' });
+  }
+  db.gameInvites[inviteId] = inviteData;
+  saveDb();
+  emitToUser(receiverId, 'game:invitation-received', inviteData);
+  emitToUser(receiverId, 'game:invite-received', inviteData);
+  res.status(201).json({ invitation: inviteData });
+});
+
+app.post('/api/games/invitations/respond', (req, res) => {
+  const { inviteId, status, roomId, responseData, senderId, receiverId } = req.body;
+  const invite = db.gameInvites[inviteId];
+  if (invite) {
+    invite.status = status;
+    saveDb();
+    const sId = senderId || invite.senderId;
+    const rId = receiverId || invite.receiverId;
+    emitToUser(sId, 'game:invite-status', { inviteId, status, roomId, ...responseData });
+    emitToUser(rId, 'game:invite-status', { inviteId, status, roomId, ...responseData });
+  }
+  res.json({ success: true });
+});
+
 app.get('/api/games/rooms/:roomId', (req, res) => {
   const room = db.gameRooms[req.params.roomId];
   if (!room) return res.status(404).json({ error: 'Room not found' });
   res.json({ room });
+});
+
+app.post('/api/games/rooms/create', (req, res) => {
+  const roomData = req.body;
+  db.gameRooms[roomData.roomId] = roomData;
+  saveDb();
+  emitToUser(roomData.player1Id, 'game:room-created', roomData);
+  emitToUser(roomData.player2Id, 'game:room-created', roomData);
+  res.status(201).json({ room: roomData });
+});
+
+app.post('/api/games/rooms/:roomId/move', (req, res) => {
+  const { roomId } = req.params;
+  const { updateData } = req.body;
+  const room = db.gameRooms[roomId];
+  if (room) {
+    Object.assign(room, updateData, { updatedAt: Date.now() });
+    saveDb();
+    emitToUser(room.player1Id, 'game:room-updated', room);
+    emitToUser(room.player2Id, 'game:room-updated', room);
+    return res.json({ success: true, room });
+  }
+  res.status(404).json({ error: 'Room not found' });
+});
+
+app.post('/api/games/rooms/:roomId/rematch', (req, res) => {
+  const { roomId } = req.params;
+  const { playerId } = req.body;
+  const room = db.gameRooms[roomId];
+  if (!room) return res.status(404).json({ error: 'Room not found' });
+
+  const isP1 = playerId === room.player1Id;
+  if (isP1) room.rematchPlayer1 = true;
+  else room.rematchPlayer2 = true;
+
+  if (room.rematchPlayer1 && room.rematchPlayer2) {
+    if (room.gameType === 'TIC_TAC_TOE') room.boardState = Array(9).fill('');
+    else if (room.gameType === 'CONNECT_FOUR') room.boardState = Array(42).fill('');
+    else if (room.gameType === 'ROCK_PAPER_SCISSORS') {
+      room.p1Choice = null;
+      room.p2Choice = null;
+      room.p1Score = 0;
+      room.p2Score = 0;
+      room.currentRound = 1;
+      room.lastRoundResult = '';
+    }
+    room.status = 'IN_PROGRESS';
+    room.winnerId = null;
+    room.winnerUsername = null;
+    room.isDraw = false;
+    room.winningLine = [];
+    room.rematchPlayer1 = false;
+    room.rematchPlayer2 = false;
+    room.currentTurnPlayerId = room.player1Id;
+  }
+
+  room.updatedAt = Date.now();
+  saveDb();
+  emitToUser(room.player1Id, 'game:room-updated', room);
+  emitToUser(room.player2Id, 'game:room-updated', room);
+  res.json({ success: true, room });
 });

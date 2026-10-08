@@ -351,11 +351,20 @@ export class CallManager {
   async rejectCall(callId, callerId) {
     sounds.stopTone();
     sounds.playCallEndTone();
-    realtimeSocket.emit('webrtc:call-reject', {
-      callId,
-      callerId,
-      receiverId: this.targetUserId,
-    });
+    const peerId = callerId || this.targetUserId;
+    if (peerId) {
+      realtimeSocket.emit('webrtc:call-rejected', {
+        callId,
+        callerId: peerId,
+        targetUserId: peerId,
+        otherUserId: peerId,
+      });
+      realtimeSocket.emit('webrtc:call-hangup', {
+        callId,
+        otherUserId: peerId,
+        targetUserId: peerId,
+      });
+    }
     this.cleanup();
   }
 
@@ -366,9 +375,15 @@ export class CallManager {
     sounds.stopTone();
     sounds.playCallEndTone();
     if (this.currentCallId && this.targetUserId) {
+      realtimeSocket.emit('webrtc:call-hangup', {
+        callId: this.currentCallId,
+        otherUserId: this.targetUserId,
+        targetUserId: this.targetUserId,
+      });
       realtimeSocket.emit('webrtc:call-end', {
         callId: this.currentCallId,
         targetUserId: this.targetUserId,
+        otherUserId: this.targetUserId,
       });
     }
     this.cleanup();

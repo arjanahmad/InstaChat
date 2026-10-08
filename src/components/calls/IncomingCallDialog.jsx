@@ -13,6 +13,7 @@ export default function IncomingCallDialog() {
   return (
     <div
       className="modal-backdrop"
+      data-testid="incoming-call-dialog"
       style={{
         zIndex: 2500,
         background: 'rgba(5, 8, 20, 0.88)',
@@ -75,6 +76,7 @@ export default function IncomingCallDialog() {
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
             <button
               type="button"
+              data-testid="decline-incoming-call-btn"
               onClick={rejectCall}
               className="btn-danger"
               style={{
@@ -94,6 +96,7 @@ export default function IncomingCallDialog() {
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
             <button
               type="button"
+              data-testid="accept-incoming-call-btn"
               onClick={acceptCall}
               className="btn-primary"
               style={{

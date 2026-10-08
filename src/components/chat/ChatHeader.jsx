@@ -76,6 +76,7 @@ export default function ChatHeader({ friend, typingUser, onBack }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
         <button
           type="button"
+          data-testid="start-audio-call-btn"
           onClick={handleAudioCall}
           className="btn-icon"
           title="Start Audio Call"
@@ -85,6 +86,7 @@ export default function ChatHeader({ friend, typingUser, onBack }) {
 
         <button
           type="button"
+          data-testid="start-video-call-btn"
           onClick={handleVideoCall}
           className="btn-icon"
           title="Start Video Call"
@@ -94,6 +96,7 @@ export default function ChatHeader({ friend, typingUser, onBack }) {
 
         <button
           type="button"
+          data-testid="challenge-game-btn"
           onClick={handleChallengeGame}
           className="btn-icon"
           title="Challenge to Game"
