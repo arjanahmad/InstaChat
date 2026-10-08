@@ -436,6 +436,21 @@ app.post('/api/auth/signup', (req, res) => {
   db.usernames[lowerUser] = userId;
   saveDb();
 
+  // Async sync user to Cloudinary distributed store for multi-container discovery
+  try {
+    const { passwordHash: _, ...safeSnapshot } = newUser;
+    const fd = new FormData();
+    const b = new Blob([JSON.stringify(safeSnapshot)], { type: 'application/json' });
+    fd.append('file', b, `${lowerUser}.json`);
+    fd.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+    fd.append('public_id', `instachat_user_${lowerUser}`);
+
+    fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/raw/upload`, {
+      method: 'POST',
+      body: fd,
+    }).catch(() => {});
+  } catch (_) {}
+
   const { passwordHash, ...safeUser } = newUser;
   res.status(201).json({ user: safeUser, token: `token_${userId}` });
 });
@@ -515,7 +530,7 @@ app.post('/api/auth/update-profile', (req, res) => {
 /*                              FRIEND ROUTES                                */
 /* ========================================================================= */
 
-app.get('/api/friends/search', (req, res) => {
+app.get('/api/friends/search', async (req, res) => {
   const { q, currentUserId } = req.query;
   if (!q || q.trim().length < 2) {
     return res.json({ users: [] });
@@ -530,6 +545,25 @@ app.get('/api/friends/search', (req, res) => {
       const { passwordHash, ...safeUser } = u;
       matched.push(safeUser);
     }
+  }
+
+  // Cross-container sync fallback via Cloudinary
+  if (matched.length === 0) {
+    try {
+      const cloudRes = await fetch(`https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/raw/upload/instachat_user_${queryClean}.json?t=${Date.now()}`, {
+        signal: AbortSignal.timeout(2000),
+      });
+      if (cloudRes.ok) {
+        const u = await cloudRes.json();
+        if (u && u.userId && u.userId !== currentUserId) {
+          db.users[u.userId] = u;
+          db.usernames[u.usernameLower] = u.userId;
+          saveDb();
+          const { passwordHash, ...safeUser } = u;
+          matched.push(safeUser);
+        }
+      }
+    } catch (_) {}
   }
 
   res.json({ users: matched });

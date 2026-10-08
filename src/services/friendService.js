@@ -136,6 +136,9 @@ export function subscribeToIncomingFriendRequests(userId, callback) {
 
   const unsubReceived = realtimeSocket.on('friend:request-received', (reqDoc) => {
     if (reqDoc.receiverId === userId) {
+      if (isSubscribed) {
+        callback([reqDoc]);
+      }
       fetchRequests();
     }
   });
