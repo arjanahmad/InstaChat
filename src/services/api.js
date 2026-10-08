@@ -6,7 +6,12 @@
 
 const rawBackendUrl = (import.meta.env.VITE_BACKEND_URL || '').trim();
 let configuredBaseUrl = rawBackendUrl ? rawBackendUrl.replace(/\/+$/, '') : '';
-let useSameOriginFallback = false;
+const isSameOriginPreferred = typeof window !== 'undefined' && (
+  window.location.hostname.includes('netlify.app') ||
+  window.location.hostname === 'localhost' ||
+  !configuredBaseUrl
+);
+let useSameOriginFallback = isSameOriginPreferred;
 
 export async function apiRequest(endpoint, method = 'GET', body = null) {
   const headers = {
