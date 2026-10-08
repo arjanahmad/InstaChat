@@ -584,8 +584,14 @@ app.get('/api/friends/:userId', (req, res) => {
       customNickname = fsItem.nicknameB || '';
     }
 
-    if (friendId && db.users[friendId]) {
-      const fu = db.users[friendId];
+    if (friendId) {
+      const fu = db.users[friendId] || {
+        userId: friendId,
+        username: fsItem.userA === friendId ? (fsItem.usernameA || 'Friend') : (fsItem.usernameB || 'Friend'),
+        profileImageUrl: null,
+        online: false,
+        lastActive: Date.now(),
+      };
       friendList.push({
         friendId: fu.userId,
         friendUsername: fu.username,
@@ -662,13 +668,34 @@ app.post('/api/friends/accept', (req, res) => {
   const { requestId, currentUserId } = req.body;
   const reqDoc = db.friendRequests[requestId];
 
-  if (!reqDoc) {
-    return res.status(404).json({ error: 'Request not found' });
+  let sId = reqDoc?.senderId;
+  let rId = reqDoc?.receiverId;
+
+  if (!sId || !rId) {
+    if (requestId && typeof requestId === 'string') {
+      const idx = requestId.indexOf('_usr_', 4);
+      if (idx !== -1) {
+        sId = requestId.substring(0, idx);
+        rId = requestId.substring(idx + 1);
+      }
+    }
   }
 
-  reqDoc.status = 'ACCEPTED';
-  const sId = reqDoc.senderId;
-  const rId = reqDoc.receiverId;
+  if (!sId || !rId) {
+    return res.status(400).json({ error: 'Invalid requestId' });
+  }
+
+  if (reqDoc) {
+    reqDoc.status = 'ACCEPTED';
+  } else {
+    db.friendRequests[requestId] = {
+      requestId,
+      senderId: sId,
+      receiverId: rId,
+      status: 'ACCEPTED',
+      createdAt: Date.now(),
+    };
+  }
 
   const fKey = sId < rId ? `${sId}_${rId}` : `${rId}_${sId}`;
   db.friendships[fKey] = {

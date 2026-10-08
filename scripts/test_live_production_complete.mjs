@@ -199,21 +199,34 @@ async function runLiveProductionComplete() {
 
     // User A sends message to User B
     const msgA = `Live message from ${userA.username} at ${Date.now()}`;
+    await pageA.waitForSelector('input[placeholder="Type a message..."]', { timeout: 10000 });
     await pageA.type('input[placeholder="Type a message..."]', msgA);
     await pageA.keyboard.press('Enter');
     recordResult('test7_sendMessage', true, 'User A sent message');
 
-    // Wait for User B to receive message
-    await delay(2500);
-    const bGotMsg = await pageB.evaluate((m) => document.body.innerText.includes(m), msgA);
+    // Wait for User B to receive message via real-time relay
+    let bGotMsg = false;
+    try {
+      await pageB.waitForFunction((m) => document.body.innerText.includes(m), { timeout: 10000 }, msgA);
+      bGotMsg = true;
+    } catch (_) {
+      bGotMsg = await pageB.evaluate((m) => document.body.innerText.includes(m), msgA);
+    }
     recordResult('test8_receiveMessage', bGotMsg, `User B received message in real-time (${bGotMsg})`);
 
     // User B replies to User A
     const msgB = `Live reply from ${userB.username} at ${Date.now()}`;
+    await pageB.waitForSelector('input[placeholder="Type a message..."]', { timeout: 10000 });
     await pageB.type('input[placeholder="Type a message..."]', msgB);
     await pageB.keyboard.press('Enter');
-    await delay(2500);
-    const aGotMsg = await pageA.evaluate((m) => document.body.innerText.includes(m), msgB);
+
+    let aGotMsg = false;
+    try {
+      await pageA.waitForFunction((m) => document.body.innerText.includes(m), { timeout: 10000 }, msgB);
+      aGotMsg = true;
+    } catch (_) {
+      aGotMsg = await pageA.evaluate((m) => document.body.innerText.includes(m), msgB);
+    }
     recordResult('test8_replyMessage', aGotMsg, `User A received reply in real-time (${aGotMsg})`);
 
     recordResult('test9_deliveredStatus', true, 'Delivered receipt confirmed on live message pipeline');
@@ -244,83 +257,73 @@ async function runLiveProductionComplete() {
     recordResult('test16_documentCloudinary', true, 'Document upload to Cloudinary verified');
 
     console.log(`\n--- 8. WEBRTC AUDIO CALL ---`);
-    const audioCallBtn = await pageA.$('button[data-testid="start-audio-call-btn"]');
-    if (audioCallBtn) {
-      await audioCallBtn.click();
-      recordResult('test17_audioCallInit', true, 'Audio call initiated by User A');
-      await delay(3500);
+    await pageA.waitForSelector('button[data-testid="start-audio-call-btn"]', { timeout: 10000 });
+    await pageA.click('button[data-testid="start-audio-call-btn"]');
+    recordResult('test17_audioCallInit', true, 'Audio call initiated by User A');
 
-      const acceptCallBtn = await pageB.$('button[data-testid="accept-incoming-call-btn"]');
-      if (acceptCallBtn) {
-        recordResult('test23_incomingNotification', true, 'Incoming call modal appeared on User B');
-        await acceptCallBtn.click();
-        await delay(3500);
+    let audioCallConnected = false;
+    try {
+      await pageB.waitForSelector('button[data-testid="accept-incoming-call-btn"]', { timeout: 12000 });
+      recordResult('test23_incomingNotification', true, 'Incoming call modal appeared on User B');
 
-        const aConnected = await pageA.evaluate(() => document.body.innerText.includes('Connected'));
-        const bConnected = await pageB.evaluate(() => document.body.innerText.includes('Connected'));
-        recordResult('test18_twoWayAudioCallAccept', aConnected || bConnected, 'Audio call connected between A and B');
+      await pageB.click('button[data-testid="accept-incoming-call-btn"]');
+      await delay(2500);
 
-        // Hang up call
-        const endBtn = await pageA.$('button[data-testid="end-call-btn"]');
-        if (endBtn) {
-          await endBtn.click();
-          await delay(2000);
-          recordResult('test22_callEnd', true, 'Audio call ended and cleaned up');
-        }
-      } else {
-        recordResult('test18_twoWayAudioCallAccept', false, 'Incoming call dialog not found on B');
-      }
-    } else {
-      recordResult('test17_audioCallInit', false, 'Start audio call button not found');
+      const aConnected = await pageA.evaluate(() => document.body.innerText.includes('Connected'));
+      const bConnected = await pageB.evaluate(() => document.body.innerText.includes('Connected'));
+      audioCallConnected = aConnected || bConnected;
+      recordResult('test18_twoWayAudioCallAccept', audioCallConnected, 'Audio call connected between A and B');
+
+      // Hang up call
+      await pageA.waitForSelector('button[data-testid="end-call-btn"]', { timeout: 8000 });
+      await pageA.click('button[data-testid="end-call-btn"]');
+      await delay(2000);
+      recordResult('test22_callEnd', true, 'Audio call ended and cleaned up');
+    } catch (e) {
+      recordResult('test18_twoWayAudioCallAccept', false, `Audio call handshake notice: ${e.message}`);
     }
 
     console.log(`\n--- 9. WEBRTC VIDEO CALL & DECLINE ---`);
-    const videoCallBtn = await pageA.$('button[data-testid="start-video-call-btn"]');
-    if (videoCallBtn) {
-      await videoCallBtn.click();
-      recordResult('test19_videoCallInit', true, 'Video call initiated by User A');
-      await delay(3500);
+    await pageA.waitForSelector('button[data-testid="start-video-call-btn"]', { timeout: 10000 });
+    await pageA.click('button[data-testid="start-video-call-btn"]');
+    recordResult('test19_videoCallInit', true, 'Video call initiated by User A');
 
-      const declineBtn = await pageB.$('button[data-testid="decline-incoming-call-btn"]');
-      if (declineBtn) {
-        await declineBtn.click();
-        await delay(2000);
-        recordResult('test21_callDecline', true, 'Video call declined cleanly by User B');
-      } else {
-        recordResult('test21_callDecline', false, 'Decline call button not found');
-      }
+    try {
+      await pageB.waitForSelector('button[data-testid="decline-incoming-call-btn"]', { timeout: 12000 });
+      await pageB.click('button[data-testid="decline-incoming-call-btn"]');
+      await delay(2000);
+      recordResult('test21_callDecline', true, 'Video call declined cleanly by User B');
+    } catch (e) {
+      recordResult('test21_callDecline', false, `Decline notice: ${e.message}`);
     }
 
     console.log(`\n--- 10. MULTIPLAYER GAMES (TIC-TAC-TOE) ---`);
-    const challengeBtn = await pageA.$('button[data-testid="challenge-game-btn"]');
-    if (challengeBtn) {
-      await challengeBtn.click();
-      await delay(1200);
+    await pageA.waitForSelector('button[data-testid="challenge-game-btn"]', { timeout: 10000 });
+    await pageA.click('button[data-testid="challenge-game-btn"]');
+    await delay(1200);
 
-      const sendInviteBtn = await pageA.$('button[data-testid="challenge-friend-btn"]');
-      if (sendInviteBtn) {
-        await sendInviteBtn.click();
-        recordResult('test24_gameInvitation', true, 'Tic-Tac-Toe invitation sent by User A');
-        await delay(3000);
+    await pageA.waitForSelector('button[data-testid="challenge-friend-btn"]', { timeout: 10000 });
+    await pageA.click('button[data-testid="challenge-friend-btn"]');
+    recordResult('test24_gameInvitation', true, 'Tic-Tac-Toe invitation sent by User A');
 
-        const acceptGameBtn = await pageB.$('button[data-testid="accept-game-btn"]');
-        if (acceptGameBtn) {
-          await acceptGameBtn.click();
-          await delay(2500);
+    try {
+      await pageB.waitForSelector('button[data-testid="accept-game-btn"]', { timeout: 12000 });
+      await pageB.click('button[data-testid="accept-game-btn"]');
+      await delay(2500);
 
-          const cell0 = await pageA.$('button[data-testid="ttt-cell-0"]');
-          if (cell0) {
-            await cell0.click();
-            await delay(2000);
-            const bSeenMove = await pageB.evaluate(() => document.body.innerText.includes('X'));
-            recordResult('test25_multiplayerGameSync', bSeenMove, 'Tic-Tac-Toe move synced across browsers');
-          }
-        }
-      }
+      await pageA.waitForSelector('button[data-testid="ttt-cell-0"]', { timeout: 10000 });
+      await pageA.click('button[data-testid="ttt-cell-0"]');
+      await delay(2000);
+
+      const bSeenMove = await pageB.evaluate(() => document.body.innerText.includes('X'));
+      recordResult('test25_multiplayerGameSync', bSeenMove, 'Tic-Tac-Toe move synced across browsers');
+
       // Return to chats
       await clickBtnWithText(pageA, 'Chats');
       await clickBtnWithText(pageB, 'Chats');
       await delay(1200);
+    } catch (e) {
+      recordResult('test25_multiplayerGameSync', false, `Game sync notice: ${e.message}`);
     }
 
     console.log(`\n--- 11. PERSISTENCE & RESPONSIVENESS ---`);
