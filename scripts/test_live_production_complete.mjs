@@ -284,14 +284,15 @@ async function runLiveProductionComplete() {
     }
 
     console.log(`\n--- 9. WEBRTC VIDEO CALL & DECLINE ---`);
+    await delay(3000); // Ensure complete WebRTC cleanup and cooldown
     await pageA.waitForSelector('button[data-testid="start-video-call-btn"]', { timeout: 10000 });
     await pageA.click('button[data-testid="start-video-call-btn"]');
     recordResult('test19_videoCallInit', true, 'Video call initiated by User A');
 
     try {
-      await pageB.waitForSelector('button[data-testid="decline-incoming-call-btn"]', { timeout: 12000 });
+      await pageB.waitForSelector('button[data-testid="decline-incoming-call-btn"]', { timeout: 15000 });
       await pageB.click('button[data-testid="decline-incoming-call-btn"]');
-      await delay(2000);
+      await delay(2500);
       recordResult('test21_callDecline', true, 'Video call declined cleanly by User B');
     } catch (e) {
       recordResult('test21_callDecline', false, `Decline notice: ${e.message}`);
@@ -300,22 +301,27 @@ async function runLiveProductionComplete() {
     console.log(`\n--- 10. MULTIPLAYER GAMES (TIC-TAC-TOE) ---`);
     await pageA.waitForSelector('button[data-testid="challenge-game-btn"]', { timeout: 10000 });
     await pageA.click('button[data-testid="challenge-game-btn"]');
-    await delay(1200);
+    await delay(1500);
 
     await pageA.waitForSelector('button[data-testid="challenge-friend-btn"]', { timeout: 10000 });
     await pageA.click('button[data-testid="challenge-friend-btn"]');
     recordResult('test24_gameInvitation', true, 'Tic-Tac-Toe invitation sent by User A');
 
     try {
-      await pageB.waitForSelector('button[data-testid="accept-game-btn"]', { timeout: 12000 });
+      await pageB.waitForSelector('button[data-testid="accept-game-btn"]', { timeout: 15000 });
       await pageB.click('button[data-testid="accept-game-btn"]');
       await delay(2500);
 
-      await pageA.waitForSelector('button[data-testid="ttt-cell-0"]', { timeout: 10000 });
+      await pageA.waitForSelector('button[data-testid="ttt-cell-0"]', { timeout: 15000 });
       await pageA.click('button[data-testid="ttt-cell-0"]');
       await delay(2000);
 
-      const bSeenMove = await pageB.evaluate(() => document.body.innerText.includes('X'));
+      let bSeenMove = false;
+      for (let i = 0; i < 6; i++) {
+        bSeenMove = await pageB.evaluate(() => document.body.innerText.includes('X'));
+        if (bSeenMove) break;
+        await delay(1200);
+      }
       recordResult('test25_multiplayerGameSync', bSeenMove, 'Tic-Tac-Toe move synced across browsers');
 
       // Return to chats

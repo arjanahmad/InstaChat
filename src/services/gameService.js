@@ -24,27 +24,44 @@ export async function sendGameInvitation(senderUser, receiverUser, gameType) {
 
   const inviteData = {
     invitationId,
+    inviteId: invitationId,
     roomId,
     gameType,
     senderUser,
+    senderId: senderUser.userId,
+    senderUsername: senderUser.username,
     receiverUser,
+    receiverId: receiverUser.userId,
+    targetUserId: receiverUser.userId,
+    status: 'PENDING',
     timestamp: Date.now(),
   };
+
+  const initialRoom = {
+    roomId,
+    gameType,
+    player1Id: senderUser.userId,
+    player1Username: senderUser.username,
+    player2Id: receiverUser.userId,
+    player2Username: receiverUser.username,
+    currentTurnPlayerId: senderUser.userId,
+    boardState: Array(9).fill(''),
+    status: GAME_STATUS.IN_PROGRESS,
+  };
+
+  try {
+    await api.post('/api/games/rooms/create', initialRoom);
+  } catch (_) {}
+
+  try {
+    await api.post('/api/games/invitations/send', inviteData);
+  } catch (_) {}
 
   realtimeSocket.emit('game:invite', inviteData);
 
   return {
     invitation: inviteData,
-    room: {
-      roomId,
-      gameType,
-      player1Id: senderUser.userId,
-      player1Username: senderUser.username,
-      player2Id: receiverUser.userId,
-      player2Username: receiverUser.username,
-      currentTurnPlayerId: senderUser.userId,
-      status: GAME_STATUS.WAITING,
-    },
+    room: initialRoom,
   };
 }
 
@@ -52,11 +69,29 @@ export async function sendGameInvitation(senderUser, receiverUser, gameType) {
  * Accept game invitation
  */
 export async function acceptGameInvitation(invitation, currentUser) {
-  realtimeSocket.emit('game:accept', {
-    invitationId: invitation.invitationId,
+  const senderId = invitation.senderId || invitation.senderUser?.userId;
+  const payload = {
+    invitationId: invitation.invitationId || invitation.inviteId,
+    inviteId: invitation.invitationId || invitation.inviteId,
     roomId: invitation.roomId,
     user: currentUser,
-  });
+    targetUserId: senderId,
+    senderId,
+    receiverId: currentUser.userId,
+  };
+
+  try {
+    await api.post('/api/games/invitations/respond', {
+      inviteId: payload.inviteId,
+      status: 'ACCEPTED',
+      roomId: payload.roomId,
+      senderId: payload.senderId,
+      receiverId: payload.receiverId,
+      responseData: { user: currentUser },
+    });
+  } catch (_) {}
+
+  realtimeSocket.emit('game:accept', payload);
 }
 
 /**
@@ -86,12 +121,29 @@ export function subscribeToGameInvitations(userId, callback) {
 
   fetchInitial();
 
-  return realtimeSocket.on('game:invitation-received', (inv) => {
-    if (inv.receiverId === userId) {
-      invitations = [inv, ...invitations.filter((i) => i.invitationId !== inv.invitationId)];
+  const handleInv = (inv) => {
+    const rId = inv.receiverId || inv.receiverUser?.userId;
+    if (rId === userId) {
+      const normalized = {
+        ...inv,
+        invitationId: inv.invitationId || inv.inviteId,
+        inviteId: inv.invitationId || inv.inviteId,
+        senderUsername: inv.senderUsername || inv.senderUser?.username,
+      };
+      invitations = [normalized, ...invitations.filter((i) => (i.invitationId || i.inviteId) !== normalized.invitationId)];
       callback(invitations);
     }
-  });
+  };
+
+  const unsub1 = realtimeSocket.on('game:invitation-received', handleInv);
+  const unsub2 = realtimeSocket.on('game:invite-received', handleInv);
+  const unsub3 = realtimeSocket.on('game:invite', handleInv);
+
+  return () => {
+    unsub1();
+    unsub2();
+    unsub3();
+  };
 }
 
 /**
@@ -108,12 +160,18 @@ export function subscribeToGameRoom(roomId, callback) {
   };
 
   fetchInitial();
+  const pollTimer = setInterval(fetchInitial, 1500);
 
-  return realtimeSocket.on('game:room-updated', (room) => {
+  const unsub = realtimeSocket.on('game:room-updated', (room) => {
     if (room.roomId === roomId) {
       callback(room);
     }
   });
+
+  return () => {
+    clearInterval(pollTimer);
+    unsub();
+  };
 }
 
 /**
@@ -161,7 +219,15 @@ export async function makeTicTacToeMove(room, index, playerId) {
     winningLine,
   };
 
-  realtimeSocket.emit('game:move', { roomId: room.roomId, updateData: updates });
+  try {
+    await api.post(`/api/games/rooms/${room.roomId}/move`, { updateData: updates });
+  } catch (_) {}
+
+  realtimeSocket.emit('game:move', {
+    roomId: room.roomId,
+    updateData: updates,
+    targetUserId: nextPlayer,
+  });
 }
 
 /**

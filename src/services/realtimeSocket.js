@@ -183,14 +183,17 @@ class RealtimeSocketManager {
     if (!targetUserId) {
       if (event === 'webrtc:call-answer') {
         targetUserId = data.callerId;
+      } else if (event === 'game:accept') {
+        targetUserId = data.senderId || data.senderUser?.userId || data.invitation?.senderUser?.userId;
+      } else if (event === 'game:move') {
+        targetUserId = data.nextPlayer || data.otherPlayerId || data.opponentId;
       } else {
         targetUserId =
           data.receiverId ||
           data.receiverUser?.userId ||
           data.receiverUser?.uid ||
           data.callerId ||
-          data.otherUserId ||
-          (data.user?.userId);
+          data.otherUserId;
       }
     }
 

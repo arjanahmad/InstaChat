@@ -954,6 +954,49 @@ app.post('/api/signaling/send', (req, res) => {
     emitToUser(targetUserId, 'webrtc:call-answered', data);
   } else if (event === 'webrtc:call-hangup') {
     emitToUser(targetUserId, 'webrtc:call-end', data);
+  } else if (event === 'game:invite' || event === 'game:invite-send') {
+    const inviteId = data.invitationId || data.inviteId;
+    const receiverId = targetUserId || data.receiverId || data.receiverUser?.userId;
+    const senderUsername = data.senderUsername || data.senderUser?.username;
+    const normalized = {
+      ...data,
+      invitationId: inviteId,
+      inviteId,
+      receiverId,
+      senderUsername,
+      status: 'PENDING',
+    };
+    if (inviteId) {
+      db.gameInvites[inviteId] = normalized;
+    }
+    emitToUser(receiverId, 'game:invitation-received', normalized);
+    emitToUser(receiverId, 'game:invite-received', normalized);
+  } else if (event === 'game:accept') {
+    const id = data.invitationId || data.inviteId;
+    const invite = db.gameInvites[id];
+    if (invite) {
+      invite.status = 'ACCEPTED';
+    }
+    const rId = data.roomId || invite?.roomId;
+    if (rId && db.gameRooms[rId]) {
+      db.gameRooms[rId].status = 'IN_PROGRESS';
+      emitToUser(db.gameRooms[rId].player1Id, 'game:room-updated', db.gameRooms[rId]);
+      emitToUser(db.gameRooms[rId].player2Id, 'game:room-updated', db.gameRooms[rId]);
+    }
+    const sId = invite?.senderId || data.senderId;
+    if (sId) {
+      emitToUser(sId, 'game:invite-status', { inviteId: id, status: 'ACCEPTED', roomId: rId, user: data.user });
+    }
+  } else if (event === 'game:move' && data?.roomId) {
+    let room = db.gameRooms[data.roomId];
+    if (!room) {
+      db.gameRooms[data.roomId] = { roomId: data.roomId, boardState: Array(9).fill(''), status: 'IN_PROGRESS', ...data.updateData };
+      room = db.gameRooms[data.roomId];
+    } else if (data.updateData) {
+      Object.assign(room, data.updateData, { updatedAt: Date.now() });
+    }
+    if (room.player1Id) emitToUser(room.player1Id, 'game:room-updated', room);
+    if (room.player2Id) emitToUser(room.player2Id, 'game:room-updated', room);
   }
 
   saveDb();
@@ -1079,6 +1122,15 @@ app.post('/api/games/invitations/respond', (req, res) => {
     emitToUser(sId, 'game:invite-status', { inviteId, status, roomId, ...responseData });
     emitToUser(rId, 'game:invite-status', { inviteId, status, roomId, ...responseData });
   }
+
+  const rId = roomId || invite?.roomId;
+  if (rId && db.gameRooms[rId] && status === 'ACCEPTED') {
+    db.gameRooms[rId].status = 'IN_PROGRESS';
+    saveDb();
+    emitToUser(db.gameRooms[rId].player1Id, 'game:room-updated', db.gameRooms[rId]);
+    emitToUser(db.gameRooms[rId].player2Id, 'game:room-updated', db.gameRooms[rId]);
+  }
+
   res.json({ success: true });
 });
 
