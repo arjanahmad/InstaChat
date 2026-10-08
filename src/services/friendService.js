@@ -27,6 +27,13 @@ export async function sendFriendRequest(senderUser, receiverUser) {
     receiverUser,
   });
 
+  if (res.request) {
+    realtimeSocket.emit('friend:request-received', {
+      targetUserId: receiverUser.userId || receiverUser.uid,
+      ...res.request,
+    });
+  }
+
   return res.request;
 }
 
@@ -39,6 +46,14 @@ export async function acceptFriendRequest(request, currentUser) {
     requestId: request.requestId,
     currentUserId: currentId,
   });
+
+  const targetUserId = request.senderId === currentId ? request.receiverId : request.senderId;
+  realtimeSocket.emit('friend:request-accepted', {
+    targetUserId,
+    requestId: request.requestId,
+    friendship: res.friendship,
+  });
+
   return res;
 }
 

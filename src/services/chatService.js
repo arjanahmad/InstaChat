@@ -24,6 +24,15 @@ export async function ensureConversation(userA, userB) {
  */
 export async function sendMessage(conversationId, messageData) {
   const res = await api.post(`/api/conversations/${conversationId}/messages`, messageData);
+  if (res.message) {
+    const targetUserId = messageData.receiverId || messageData.otherUserId;
+    if (targetUserId) {
+      realtimeSocket.emit('chat:message-received', {
+        targetUserId,
+        ...res.message,
+      });
+    }
+  }
   return res.message;
 }
 
