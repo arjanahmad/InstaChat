@@ -179,14 +179,20 @@ class RealtimeSocketManager {
 
     // 2. Dual-mode relay: Always relay signaling/typing/games through REST API
     // so receiver picks it up regardless of WebSocket connectivity
-    const targetUserId =
-      data.targetUserId ||
-      data.receiverId ||
-      data.receiverUser?.userId ||
-      data.receiverUser?.uid ||
-      data.callerId ||
-      data.otherUserId ||
-      (data.user?.userId);
+    let targetUserId = data.targetUserId;
+    if (!targetUserId) {
+      if (event === 'webrtc:call-answer') {
+        targetUserId = data.callerId;
+      } else {
+        targetUserId =
+          data.receiverId ||
+          data.receiverUser?.userId ||
+          data.receiverUser?.uid ||
+          data.callerId ||
+          data.otherUserId ||
+          (data.user?.userId);
+      }
+    }
 
     if (targetUserId) {
       api.post('/api/signaling/send', {

@@ -98,6 +98,32 @@ export function saveDb() {
   }
 }
 
+const CLOUDINARY_CLOUD_NAME = process.env.VITE_CLOUDINARY_CLOUD_NAME || 'jdkg4l75';
+const CLOUDINARY_UPLOAD_PRESET = process.env.VITE_CLOUDINARY_UPLOAD_PRESET || 'battlechat_upload';
+const CLOUDINARY_DB_URL = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/raw/upload/instachat_persistent_db.json`;
+
+function applyRemoteData(remoteData) {
+  if (!remoteData || typeof remoteData !== 'object') return;
+  db = {
+    ...initialData,
+    ...db,
+    ...remoteData,
+    users: { ...initialData.users, ...(db.users || {}), ...(remoteData.users || {}) },
+    usernames: { ...initialData.usernames, ...(db.usernames || {}), ...(remoteData.usernames || {}) },
+    friendships: { ...initialData.friendships, ...(db.friendships || {}), ...(remoteData.friendships || {}) },
+    friendRequests: { ...initialData.friendRequests, ...(db.friendRequests || {}), ...(remoteData.friendRequests || {}) },
+    conversations: { ...initialData.conversations, ...(db.conversations || {}), ...(remoteData.conversations || {}) },
+    messages: { ...initialData.messages, ...(db.messages || {}), ...(remoteData.messages || {}) },
+    gameRooms: { ...initialData.gameRooms, ...(db.gameRooms || {}), ...(remoteData.gameRooms || {}) },
+    gameInvites: { ...initialData.gameInvites, ...(db.gameInvites || {}), ...(remoteData.gameInvites || {}) },
+    activeCalls: { ...initialData.activeCalls, ...(db.activeCalls || {}), ...(remoteData.activeCalls || {}) },
+    pendingEvents: { ...initialData.pendingEvents, ...(db.pendingEvents || {}), ...(remoteData.pendingEvents || {}) },
+  };
+  try {
+    fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2), 'utf-8');
+  } catch (_) {}
+}
+
 export async function syncDbFromStore(force = false) {
   const now = Date.now();
   if (!force && (now - lastStoreSyncTime < SYNC_CACHE_TTL_MS)) {
@@ -107,32 +133,36 @@ export async function syncDbFromStore(force = false) {
   // Load from local file first
   loadDb();
 
+  // 1. Try Netlify Blobs
   try {
     const { getStore } = await import('@netlify/blobs');
     const store = getStore({ name: 'instachat-db', consistency: 'strong' });
     const remoteData = await store.get('db_state', { type: 'json' });
-    if (remoteData && typeof remoteData === 'object') {
-      db = {
-        ...initialData,
-        ...remoteData,
-        users: { ...initialData.users, ...(remoteData.users || {}) },
-        usernames: { ...initialData.usernames, ...(remoteData.usernames || {}) },
-        friendships: { ...initialData.friendships, ...(remoteData.friendships || {}) },
-        friendRequests: { ...initialData.friendRequests, ...(remoteData.friendRequests || {}) },
-        conversations: { ...initialData.conversations, ...(remoteData.conversations || {}) },
-        messages: { ...initialData.messages, ...(remoteData.messages || {}) },
-        gameRooms: { ...initialData.gameRooms, ...(remoteData.gameRooms || {}) },
-        gameInvites: { ...initialData.gameInvites, ...(remoteData.gameInvites || {}) },
-        activeCalls: { ...initialData.activeCalls, ...(remoteData.activeCalls || {}) },
-      };
-      try {
-        fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2), 'utf-8');
-      } catch (_) {}
+    if (remoteData && typeof remoteData === 'object' && Object.keys(remoteData.users || {}).length > 0) {
+      applyRemoteData(remoteData);
       lastStoreSyncTime = now;
       console.log(`[DB] Netlify Blobs synced: ${Object.keys(db.users).length} users, ${Object.keys(db.friendRequests).length} friend requests.`);
+      return;
     }
-  } catch (err) {
-    // Non-fatal fallback (local disk / memory)
+  } catch (_) {
+    // Non-fatal fallback
+  }
+
+  // 2. Fallback to Cloudinary persistent store
+  try {
+    const cloudRes = await fetch(`${CLOUDINARY_DB_URL}?t=${now}`, {
+      signal: AbortSignal.timeout(2500),
+    });
+    if (cloudRes.ok) {
+      const remoteData = await cloudRes.json();
+      if (remoteData && typeof remoteData === 'object' && Object.keys(remoteData.users || {}).length > 0) {
+        applyRemoteData(remoteData);
+        lastStoreSyncTime = now;
+        console.log(`[DB] Cloudinary persistent store synced: ${Object.keys(db.users).length} users.`);
+      }
+    }
+  } catch (_) {
+    // Non-fatal
   }
 }
 
@@ -140,15 +170,33 @@ export async function syncDbToStore() {
   if (!isDbDirty) return;
   isDbDirty = false;
 
+  // 1. Try Netlify Blobs
   try {
     const { getStore } = await import('@netlify/blobs');
     const store = getStore({ name: 'instachat-db', consistency: 'strong' });
     await store.setJSON('db_state', db);
     lastStoreSyncTime = Date.now();
-    console.log(`[DB] Netlify Blobs saved: ${Object.keys(db.users).length} users, ${Object.keys(db.friendRequests).length} friend requests.`);
-  } catch (err) {
-    // Non-fatal
-  }
+    console.log(`[DB] Netlify Blobs saved: ${Object.keys(db.users).length} users.`);
+  } catch (_) {}
+
+  // 2. Try Cloudinary raw upload
+  try {
+    const formData = new FormData();
+    const blob = new Blob([JSON.stringify(db)], { type: 'application/json' });
+    formData.append('file', blob, 'instachat_persistent_db.json');
+    formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+    formData.append('public_id', 'instachat_persistent_db');
+    formData.append('resource_type', 'raw');
+    formData.append('overwrite', 'true');
+    formData.append('invalidate', 'true');
+
+    await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/raw/upload`, {
+      method: 'POST',
+      body: formData,
+      signal: AbortSignal.timeout(3500),
+    });
+    lastStoreSyncTime = Date.now();
+  } catch (_) {}
 }
 
 loadDb();
@@ -839,6 +887,14 @@ app.post('/api/signaling/send', (req, res) => {
   }
 
   emitToUser(targetUserId, event, data);
+  if (event === 'webrtc:call-offer') {
+    emitToUser(targetUserId, 'webrtc:incoming-call', data);
+  } else if (event === 'webrtc:call-answer') {
+    emitToUser(targetUserId, 'webrtc:call-answered', data);
+  } else if (event === 'webrtc:call-hangup') {
+    emitToUser(targetUserId, 'webrtc:call-end', data);
+  }
+
   saveDb();
   res.json({ success: true });
 });
@@ -852,6 +908,9 @@ app.get('/api/signaling/poll/:userId', (req, res) => {
   if (db.pendingEvents && db.pendingEvents[userId]) {
     events = db.pendingEvents[userId].filter((e) => e.timestamp > cutoff);
     db.pendingEvents[userId] = [];
+    if (events.length > 0) {
+      saveDb();
+    }
   }
 
   // Check for active ringing incoming call targeting this user

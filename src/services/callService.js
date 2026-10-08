@@ -267,6 +267,7 @@ export class CallManager {
     // Emit answer to caller
     realtimeSocket.emit('webrtc:call-answer', {
       callId: this.currentCallId,
+      targetUserId: callSession.callerId,
       callerId: callSession.callerId,
       receiverId: callSession.receiverId,
       answerSdp: answer.sdp,
@@ -284,7 +285,7 @@ export class CallManager {
     this.clearSignalingListeners();
 
     // Caller receives answer
-    const unsubAnswer = realtimeSocket.on('webrtc:call-answered', async (data) => {
+    const handleAnswer = async (data) => {
       if (data.callId === this.currentCallId && data.answerSdp) {
         sounds.stopTone();
         if (this.peerConnection && !this.peerConnection.currentRemoteDescription) {
@@ -298,8 +299,10 @@ export class CallManager {
           }
         }
       }
-    });
-    this.socketUnsubs.push(unsubAnswer);
+    };
+    const unsubAnswer1 = realtimeSocket.on('webrtc:call-answered', handleAnswer);
+    const unsubAnswer2 = realtimeSocket.on('webrtc:call-answer', handleAnswer);
+    this.socketUnsubs.push(unsubAnswer1, unsubAnswer2);
 
     // Call rejected by other party
     const unsubReject = realtimeSocket.on('webrtc:call-rejected', (data) => {
