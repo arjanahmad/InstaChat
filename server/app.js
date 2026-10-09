@@ -675,7 +675,7 @@ app.post('/api/friends/accept', (req, res) => {
 
   if (!sId || !rId) {
     if (requestId && typeof requestId === 'string') {
-      const idx = requestId.indexOf('_usr_', 4);
+      const idx = requestId.lastIndexOf('_');
       if (idx !== -1) {
         sId = requestId.substring(0, idx);
         rId = requestId.substring(idx + 1);

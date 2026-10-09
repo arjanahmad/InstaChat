@@ -65,9 +65,9 @@ export default function FriendsView({ onNavigateToChats }) {
       await acceptFriendRequest(req, currentUser);
       setIncomingRequests((prev) => prev.filter((r) => r.requestId !== req.requestId));
       const res = await api.get(`/api/friends/${currentId}`).catch(() => ({}));
-      if (res.friends) setFriends(res.friends);
+      if (res.friends && res.friends.length > 0) setFriends(res.friends);
     } catch (err) {
-      alert('Error accepting request: ' + err.message);
+      console.warn('Accept friend request notice:', err.message);
     } finally {
       setProcessingReqId(null);
     }
