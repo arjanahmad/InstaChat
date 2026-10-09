@@ -2,13 +2,23 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
+const getEnvVar = (key) => {
+  if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[key]) {
+    return import.meta.env[key];
+  }
+  if (typeof process !== 'undefined' && process.env && process.env[key]) {
+    return process.env[key];
+  }
+  return '';
+};
+
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '',
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || '',
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || '',
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || '',
+  apiKey: getEnvVar('VITE_FIREBASE_API_KEY') || 'AIzaSyCjShUCZutExsdZC3Gw-fWtMGP_ggOoC_Q',
+  authDomain: getEnvVar('VITE_FIREBASE_AUTH_DOMAIN') || 'battlechat-5329e.firebaseapp.com',
+  projectId: getEnvVar('VITE_FIREBASE_PROJECT_ID') || 'battlechat-5329e',
+  storageBucket: getEnvVar('VITE_FIREBASE_STORAGE_BUCKET') || 'battlechat-5329e.firebasestorage.app',
+  messagingSenderId: getEnvVar('VITE_FIREBASE_MESSAGING_SENDER_ID') || '800187924567',
+  appId: getEnvVar('VITE_FIREBASE_APP_ID') || '1:800187924567:android:4cfbd607ebcb887ba26312',
 };
 
 // Initialize Firebase only if API key is provided

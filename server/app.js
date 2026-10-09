@@ -186,16 +186,15 @@ export async function syncDbToStore() {
     formData.append('file', blob, 'instachat_persistent_db.json');
     formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
     formData.append('public_id', 'instachat_persistent_db');
-    formData.append('resource_type', 'raw');
-    formData.append('overwrite', 'true');
-    formData.append('invalidate', 'true');
 
-    await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/raw/upload`, {
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/raw/upload`, {
       method: 'POST',
       body: formData,
       signal: AbortSignal.timeout(3500),
     });
-    lastStoreSyncTime = Date.now();
+    if (res.ok) {
+      lastStoreSyncTime = Date.now();
+    }
   } catch (_) {}
 }
 

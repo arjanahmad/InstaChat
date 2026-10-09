@@ -40,14 +40,16 @@ export default function FriendsView({ onNavigateToChats }) {
   const [editingFriend, setEditingFriend] = useState(null);
   const [processingReqId, setProcessingReqId] = useState(null);
 
-  useEffect(() => {
-    if (!currentUser?.userId) return;
+  const currentId = currentUser?.userId || currentUser?.uid;
 
-    const unsubFriends = subscribeToFriends(currentUser.userId, (list) => {
+  useEffect(() => {
+    if (!currentId) return;
+
+    const unsubFriends = subscribeToFriends(currentId, (list) => {
       setFriends(list);
     });
 
-    const unsubReqs = subscribeToIncomingFriendRequests(currentUser.userId, (reqs) => {
+    const unsubReqs = subscribeToIncomingFriendRequests(currentId, (reqs) => {
       setIncomingRequests(reqs);
     });
 
@@ -55,14 +57,14 @@ export default function FriendsView({ onNavigateToChats }) {
       unsubFriends();
       unsubReqs();
     };
-  }, [currentUser?.userId]);
+  }, [currentId]);
 
   const handleAcceptRequest = async (req) => {
     setProcessingReqId(req.requestId);
     try {
       await acceptFriendRequest(req, currentUser);
       setIncomingRequests((prev) => prev.filter((r) => r.requestId !== req.requestId));
-      const res = await api.get(`/api/friends/${currentUser.userId}`);
+      const res = await api.get(`/api/friends/${currentId}`).catch(() => ({}));
       if (res.friends) setFriends(res.friends);
     } catch (err) {
       alert('Error accepting request: ' + err.message);

@@ -16,30 +16,32 @@ export default function AddFriendModal({ onClose }) {
     e.preventDefault();
     if (!searchTerm.trim()) return;
 
+    const currentId = currentUser?.userId || currentUser?.uid;
     setLoading(true);
     setError(null);
     try {
-      const users = await searchUsers(searchTerm, currentUser.userId);
+      const users = await searchUsers(searchTerm, currentId);
       setResults(users);
       if (users.length === 0) {
         setError(`No users found matching "${searchTerm}".`);
       }
     } catch (err) {
-      setError(err.message);
+      setError(err.message || 'An error occurred while searching for users.');
     } finally {
       setLoading(false);
     }
   };
 
   const handleSendRequest = async (targetUser) => {
-    console.log('[AddFriendModal] handleSendRequest called for:', targetUser?.username, targetUser?.userId);
+    const targetId = targetUser?.userId || targetUser?.uid;
+    console.log('[AddFriendModal] handleSendRequest called for:', targetUser?.username, targetId);
     try {
       await sendFriendRequest(currentUser, targetUser);
       console.log('[AddFriendModal] sendFriendRequest succeeded!');
-      setSentMap((prev) => ({ ...prev, [targetUser.userId]: true }));
+      setSentMap((prev) => ({ ...prev, [targetId]: true }));
     } catch (err) {
       console.error('[AddFriendModal] sendFriendRequest error:', err);
-      alert(err.message);
+      alert(err.message || 'Failed to send friend request');
     }
   };
 
@@ -73,14 +75,21 @@ export default function AddFriendModal({ onClose }) {
               onChange={(e) => setSearchTerm(e.target.value)}
               className="input-field"
               style={{ paddingLeft: '38px' }}
+              autoFocus
             />
           </div>
           <button type="submit" disabled={loading} className="btn-primary" style={{ padding: '0 18px' }}>
-            Search
+            {loading ? 'Searching...' : 'Search'}
           </button>
         </form>
 
-        {error && (
+        {loading && (
+          <div style={{ textAlign: 'center', padding: '16px', color: 'var(--text-dim)', fontSize: '0.9rem' }}>
+            Searching for registered users...
+          </div>
+        )}
+
+        {error && !loading && (
           <div
             style={{
               padding: '10px 14px',
@@ -101,56 +110,59 @@ export default function AddFriendModal({ onClose }) {
         )}
 
         {/* Results List */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '280px', overflowY: 'auto' }}>
-          {results.map((u) => {
-            const isSent = !!sentMap[u.userId];
-            return (
-              <div
-                key={u.userId}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '10px 14px',
-                  borderRadius: 'var(--radius-md)',
-                  background: 'rgba(255, 255, 255, 0.04)',
-                  border: '1px solid var(--border-glass)',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <Avatar src={u.profileImageUrl} name={u.username} size={40} online={u.online} />
-                  <div>
-                    <div style={{ fontSize: '0.92rem', fontWeight: 600, color: '#ffffff' }}>
-                      {u.username}
-                    </div>
-                    <div style={{ fontSize: '0.74rem', color: 'var(--text-dim)' }}>
-                      Wins: {u.wins || 0} • Coins: {u.coins || 100}
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  data-testid="add-friend-btn"
-                  disabled={isSent}
-                  onClick={() => handleSendRequest(u)}
-                  className={isSent ? 'btn-secondary' : 'btn-primary'}
+        {!loading && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '280px', overflowY: 'auto' }}>
+            {results.map((u) => {
+              const uId = u.userId || u.uid;
+              const isSent = !!sentMap[uId];
+              return (
+                <div
+                  key={uId}
                   style={{
-                    padding: '6px 14px',
-                    fontSize: '0.82rem',
-                    borderRadius: 'var(--radius-sm)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '10px 14px',
+                    borderRadius: 'var(--radius-md)',
+                    background: 'rgba(255, 255, 255, 0.04)',
+                    border: '1px solid var(--border-glass)',
                   }}
                 >
-                  {isSent ? (
-                    <><Check size={14} color="#10b981" /> Request Sent</>
-                  ) : (
-                    <><UserPlus size={14} /> Add</>
-                  )}
-                </button>
-              </div>
-            );
-          })}
-        </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <Avatar src={u.profileImageUrl || u.photoURL} name={u.username} size={40} online={u.online} />
+                    <div>
+                      <div style={{ fontSize: '0.92rem', fontWeight: 600, color: '#ffffff' }}>
+                        {u.username}
+                      </div>
+                      <div style={{ fontSize: '0.74rem', color: 'var(--text-dim)' }}>
+                        Wins: {u.wins || 0} • Coins: {u.coins || 100}
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    data-testid="add-friend-btn"
+                    disabled={isSent}
+                    onClick={() => handleSendRequest(u)}
+                    className={isSent ? 'btn-secondary' : 'btn-primary'}
+                    style={{
+                      padding: '6px 14px',
+                      fontSize: '0.82rem',
+                      borderRadius: 'var(--radius-sm)',
+                    }}
+                  >
+                    {isSent ? (
+                      <><Check size={14} color="#10b981" /> Request Sent</>
+                    ) : (
+                      <><UserPlus size={14} /> Add</>
+                    )}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );

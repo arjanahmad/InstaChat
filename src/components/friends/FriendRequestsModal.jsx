@@ -4,22 +4,38 @@ import Avatar from '../common/Avatar';
 import { useAuth } from '../../context/AuthContext';
 import { acceptFriendRequest, rejectFriendRequest } from '../../services/friendService';
 
-export default function FriendRequestsModal({ requests = [], onClose }) {
+export default function FriendRequestsModal({ requests = [], onClose, onAction }) {
   const { currentUser } = useAuth();
+  const [localRequests, setLocalRequests] = React.useState(requests);
+  const [processingId, setProcessingId] = React.useState(null);
+
+  React.useEffect(() => {
+    setLocalRequests(requests);
+  }, [requests]);
 
   const handleAccept = async (req) => {
+    setProcessingId(req.requestId);
     try {
       await acceptFriendRequest(req, currentUser);
+      setLocalRequests((prev) => prev.filter((r) => r.requestId !== req.requestId));
+      if (onAction) onAction(req);
     } catch (err) {
       alert('Error accepting friend request: ' + err.message);
+    } finally {
+      setProcessingId(null);
     }
   };
 
   const handleReject = async (req) => {
+    setProcessingId(req.requestId);
     try {
       await rejectFriendRequest(req.requestId);
+      setLocalRequests((prev) => prev.filter((r) => r.requestId !== req.requestId));
+      if (onAction) onAction(req);
     } catch (err) {
       alert('Error rejecting friend request: ' + err.message);
+    } finally {
+      setProcessingId(null);
     }
   };
 
@@ -32,20 +48,20 @@ export default function FriendRequestsModal({ requests = [], onClose }) {
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px' }}>
           <h3 style={{ fontSize: '1.2rem', fontWeight: 700, margin: 0, color: '#ffffff', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <UserCheck size={20} color="#00d2ff" /> Friend Requests ({requests.length})
+            <UserCheck size={20} color="#00d2ff" /> Friend Requests ({localRequests.length})
           </h3>
           <button type="button" onClick={onClose} className="btn-icon" style={{ width: 32, height: 32 }}>
             <X size={16} />
           </button>
         </div>
 
-        {requests.length === 0 ? (
+        {localRequests.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '30px 16px', color: 'var(--text-dim)', fontSize: '0.9rem' }}>
             No pending friend requests.
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '300px', overflowY: 'auto' }}>
-            {requests.map((req) => (
+            {localRequests.map((req) => (
               <div
                 key={req.requestId}
                 style={{
@@ -79,14 +95,16 @@ export default function FriendRequestsModal({ requests = [], onClose }) {
                   <button
                     type="button"
                     data-testid="accept-request-btn"
+                    disabled={processingId === req.requestId}
                     onClick={() => handleAccept(req)}
                     className="btn-primary"
                     style={{ padding: '6px 12px', fontSize: '0.8rem', borderRadius: 'var(--radius-sm)' }}
                   >
-                    <Check size={14} /> Accept
+                    <Check size={14} /> {processingId === req.requestId ? 'Accepting...' : 'Accept'}
                   </button>
                   <button
                     type="button"
+                    disabled={processingId === req.requestId}
                     onClick={() => handleReject(req)}
                     className="btn-icon"
                     style={{ width: 32, height: 32, color: '#ef4444' }}
