@@ -240,15 +240,17 @@ export async function acceptFriendRequest(request, currentUser) {
       friendshipDate: now,
     });
 
-    // Add current user to friend's friends list
-    await setDoc(doc(db, 'friends', friendId, 'userFriends', currentId), {
-      friendId: currentId,
-      friendUsername: currentName,
-      friendProfileImageUrl: currentImg,
-      friendOnline: true,
-      customNickname: '',
-      friendshipDate: now,
-    });
+    // Add current user to friend's friends list (best effort; receiver/sender listener creates self record)
+    try {
+      await setDoc(doc(db, 'friends', friendId, 'userFriends', currentId), {
+        friendId: currentId,
+        friendUsername: currentName,
+        friendProfileImageUrl: currentImg,
+        friendOnline: true,
+        customNickname: '',
+        friendshipDate: now,
+      });
+    } catch (_) {}
 
     // Sync to backend API in background
     try {
@@ -369,6 +371,29 @@ export function subscribeToFriends(userId, callback) {
       }
     );
 
+    // Automatically establish friendship record for current user when an outgoing request was accepted
+    const outgoingQ = query(
+      collection(db, 'friendRequests'),
+      where('senderId', '==', userId),
+      where('status', '==', 'ACCEPTED')
+    );
+    const unsubOutgoing = onSnapshot(outgoingQ, (snap) => {
+      snap.docs.forEach((d) => {
+        const reqData = d.data();
+        const fId = reqData.receiverId;
+        if (fId) {
+          setDoc(doc(db, 'friends', userId, 'userFriends', fId), {
+            friendId: fId,
+            friendUsername: reqData.receiverUsername,
+            friendProfileImageUrl: reqData.receiverProfileImageUrl || null,
+            friendOnline: false,
+            customNickname: '',
+            friendshipDate: reqData.createdAt || Date.now(),
+          }).catch(() => {});
+        }
+      });
+    }, () => {});
+
     // Also support socket presence events
     const unsubPresence = realtimeSocket.on('presence:changed', async () => {
       if (!isSubscribed) return;
@@ -381,6 +406,7 @@ export function subscribeToFriends(userId, callback) {
     return () => {
       isSubscribed = false;
       unsubFirestore();
+      unsubOutgoing();
       unsubPresence();
     };
   }
