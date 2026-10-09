@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from '../config/firebase';
 import {
   signUp as authSignUp,
   logIn as authLogIn,
@@ -19,21 +21,48 @@ export function AuthProvider({ children }) {
   const [authError, setAuthError] = useState(null);
 
   useEffect(() => {
-    const initAuth = async () => {
+    let unsubAuth = () => {};
+
+    if (auth) {
+      unsubAuth = onAuthStateChanged(auth, async (firebaseUser) => {
+        if (firebaseUser) {
+          try {
+            const fresh = await refreshUserProfile(firebaseUser.uid);
+            if (fresh) {
+              setCurrentUser(fresh);
+              realtimeSocket.init(firebaseUser.uid);
+            }
+          } catch (_) {}
+        } else {
+          const stored = getStoredUser();
+          if (stored?.userId) {
+            setCurrentUser(stored);
+            realtimeSocket.init(stored.userId);
+          } else {
+            setCurrentUser(null);
+          }
+        }
+        setLoading(false);
+      });
+    } else {
       const stored = getStoredUser();
       if (stored?.userId) {
         realtimeSocket.init(stored.userId);
-        try {
-          const fresh = await refreshUserProfile(stored.userId);
+        refreshUserProfile(stored.userId).then((fresh) => {
           if (fresh) setCurrentUser(fresh);
-        } catch (_) {}
+        }).catch(() => {});
       }
       setLoading(false);
+    }
+
+    return () => {
+      unsubAuth();
     };
+  }, []);
 
-    initAuth();
+  useEffect(() => {
+    if (!currentUser?.userId) return;
 
-    // Listen to profile updates
     const unsubProfile = realtimeSocket.on('user:profile-updated', (updatedUser) => {
       if (updatedUser?.userId === currentUser?.userId) {
         setCurrentUser(updatedUser);
@@ -41,9 +70,7 @@ export function AuthProvider({ children }) {
     });
 
     const handleBeforeUnload = () => {
-      if (currentUser?.userId) {
-        updatePresence(currentUser.userId, false);
-      }
+      updatePresence(currentUser.userId, false);
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);

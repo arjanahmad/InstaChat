@@ -191,7 +191,7 @@ export default function AuthModal() {
 
           <div>
             <label style={{ display: 'block', fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '6px' }}>
-              Email Address
+              {mode === 'login' ? 'Email Address or Username' : 'Email Address'}
             </label>
             <div style={{ position: 'relative' }}>
               <Mail
@@ -200,9 +200,9 @@ export default function AuthModal() {
                 style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)' }}
               />
               <input
-                type="email"
+                type={mode === 'login' ? 'text' : 'email'}
                 required
-                placeholder="you@domain.com"
+                placeholder={mode === 'login' ? 'you@domain.com or username' : 'you@domain.com'}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="input-field"

@@ -43,19 +43,29 @@ export async function signUp(username, email, password) {
 
   // If Firebase is available, perform authoritative Firebase Auth & Firestore flow
   if (auth && db) {
-    // 1. Pre-check username uniqueness in Firestore
-    const qUnique = query(
-      collection(db, 'users'),
-      where('usernameLower', '==', normalizedUsername)
-    );
-    const snapUnique = await getDocs(qUnique);
-    if (!snapUnique.empty) {
-      throw new Error(`Username "${trimmedUser}" is already taken. Please choose another.`);
-    }
-
-    // 2. Create Firebase Auth user
+    // 1. Create Firebase Auth user FIRST so request.auth != null for all Firestore security rules
     const userCredential = await createUserWithEmailAndPassword(auth, trimmedEmail, password);
     const firebaseUser = userCredential.user;
+
+    // 2. Pre-check username uniqueness in Firestore now that we are authenticated
+    try {
+      const qUnique = query(
+        collection(db, 'users'),
+        where('usernameLower', '==', normalizedUsername)
+      );
+      const snapUnique = await getDocs(qUnique);
+      const conflictingDoc = snapUnique.docs.find((d) => d.id !== firebaseUser.uid);
+      if (conflictingDoc) {
+        // Rollback created auth user
+        await firebaseUser.delete().catch(() => {});
+        throw new Error(`Username "${trimmedUser}" is already taken. Please choose another.`);
+      }
+    } catch (err) {
+      if (err.message.includes('already taken')) {
+        throw err;
+      }
+      console.warn('[authService] Username uniqueness notice:', err.message);
+    }
 
     // 3. Set display name on Auth profile
     try {
@@ -144,17 +154,21 @@ export async function logIn(emailOrUsername, password) {
   if (auth && db) {
     let emailToUse = trimmed;
 
-    // If login input is username (no @), look up email in Firestore
+    // If login input is username (no @), resolve email via backend or direct check
     if (!trimmed.includes('@')) {
-      const q = query(
-        collection(db, 'users'),
-        where('usernameLower', '==', trimmed.toLowerCase())
-      );
-      const snap = await getDocs(q);
-      if (snap.empty) {
-        throw new Error('User not found. Please check your username or register.');
+      try {
+        const backendRes = await api.post('/api/auth/login', { email: trimmed, password });
+        if (backendRes.user?.email) {
+          emailToUse = backendRes.user.email;
+        } else if (backendRes.user) {
+          localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(backendRes.user));
+          if (backendRes.token) localStorage.setItem(TOKEN_STORAGE_KEY, backendRes.token);
+          realtimeSocket.init(backendRes.user.userId);
+          return backendRes.user;
+        }
+      } catch (_) {
+        // Fall back to attempting direct sign-in or throwing helpful message
       }
-      emailToUse = snap.docs[0].data().email;
     }
 
     const cred = await signInWithEmailAndPassword(auth, emailToUse, password);

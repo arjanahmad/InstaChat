@@ -540,7 +540,9 @@ app.get('/api/friends/search', async (req, res) => {
 
   for (const u of Object.values(db.users)) {
     if (u.userId === currentUserId) continue;
-    if (u.usernameLower.includes(queryClean) || u.userId === q.trim()) {
+    const uLower = (u.usernameLower || u.username || '').toLowerCase();
+    const dLower = (u.displayName || '').toLowerCase();
+    if (uLower.includes(queryClean) || dLower.includes(queryClean) || u.userId === q.trim()) {
       const { passwordHash, ...safeUser } = u;
       matched.push(safeUser);
     }
@@ -554,9 +556,10 @@ app.get('/api/friends/search', async (req, res) => {
       });
       if (cloudRes.ok) {
         const u = await cloudRes.json();
-        if (u && u.userId && u.userId !== currentUserId) {
-          db.users[u.userId] = u;
-          db.usernames[u.usernameLower] = u.userId;
+        if (u && (u.userId || u.uid) && (u.userId !== currentUserId && u.uid !== currentUserId)) {
+          const uId = u.userId || u.uid;
+          db.users[uId] = u;
+          if (u.usernameLower) db.usernames[u.usernameLower] = uId;
           saveDb();
           const { passwordHash, ...safeUser } = u;
           matched.push(safeUser);

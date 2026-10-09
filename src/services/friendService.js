@@ -8,6 +8,7 @@ import {
   deleteDoc,
   query,
   where,
+  limit,
   onSnapshot,
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -15,7 +16,7 @@ import { api } from './api';
 import { realtimeSocket } from './realtimeSocket';
 
 /**
- * Searches users by username (exact, prefix, or ID)
+ * Searches users by username (exact, prefix, substring, or ID)
  */
 export async function searchUsers(searchTerm, currentUserId) {
   if (!searchTerm || searchTerm.trim().length < 2) return [];
@@ -58,7 +59,26 @@ export async function searchUsers(searchTerm, currentUserId) {
         });
       }
 
-      // C. Direct lookup by document ID / uid
+      // C. Substring/broader scan if exact & prefix gave nothing
+      if (results.size === 0) {
+        try {
+          const broaderQuery = query(collection(db, 'users'), limit(50));
+          const broaderSnap = await getDocs(broaderQuery);
+          broaderSnap.docs.forEach((d) => {
+            const data = d.data();
+            const id = data.userId || data.uid || d.id;
+            if (id === currentUserId) return;
+            const uLower = (data.usernameLower || data.username || '').toLowerCase();
+            const dLower = (data.displayName || '').toLowerCase();
+            const eLower = (data.email || '').toLowerCase();
+            if (uLower.includes(term) || dLower.includes(term) || eLower.includes(term)) {
+              results.set(id, { ...data, userId: id });
+            }
+          });
+        } catch (_) {}
+      }
+
+      // D. Direct lookup by document ID / uid
       if (results.size === 0 && rawTerm.length >= 8) {
         try {
           const docById = await getDoc(doc(db, 'users', rawTerm));
@@ -71,16 +91,8 @@ export async function searchUsers(searchTerm, currentUserId) {
           }
         } catch (_) {}
       }
-
-      if (results.size > 0) {
-        return Array.from(results.values());
-      }
     } catch (err) {
-      console.warn('[friendService] Firestore search error:', err.code || err.message);
-      // If it's a permission error, rethrow so UI can display proper message
-      if (err.code === 'permission-denied') {
-        throw new Error('Permission denied reading user profiles. Please ensure you are logged in.');
-      }
+      console.warn('[friendService] Firestore search notice:', err.code || err.message);
     }
   }
 
@@ -89,11 +101,18 @@ export async function searchUsers(searchTerm, currentUserId) {
     const res = await api.get(
       `/api/friends/search?q=${encodeURIComponent(rawTerm)}&currentUserId=${encodeURIComponent(currentUserId || '')}`
     );
-    return res.users || [];
+    const backendUsers = res.users || [];
+    backendUsers.forEach((u) => {
+      const id = u.userId || u.uid;
+      if (id !== currentUserId && !results.has(id)) {
+        results.set(id, u);
+      }
+    });
   } catch (err) {
     console.debug('Search users API error:', err);
-    return [];
   }
+
+  return Array.from(results.values());
 }
 
 /**
